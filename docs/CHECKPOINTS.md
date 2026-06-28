@@ -71,13 +71,27 @@
 - [ ] Probar el flujo real por SMS entre dos teléfonos (requiere 2 dispositivos).
 
 ## MSG-005 — Puente oportunista
-(pendiente de construir)
+**Construido:**
+- En `app/leer`: al registrar una alerta, si hay conexión y sesión de miembro,
+  se sube a la nube en silencio. Contenido (S/N/I) → `upsertAlertaContenido`
+  (onConflict `grupo_id,codigo_corto`, no duplica, setea `subido_en`, no toca
+  estado). Estado (E) → `cambiarEstado` (+ historial). Falla en silencio si RLS
+  rechaza por no-miembro o no hay red; la UI no se rompe.
+- En `app/grupos/mi`: al cargar se traen las alertas del grupo desde la nube, se
+  cachean y se calcula si hay actividad nueva desde la última visita →
+  **notificación con timestamp** ("🔔 Nueva actividad en el grupo · hace X").
 
-## MSG-004 — Estados + tablero por grupo
-(pendiente de construir)
+**Supuestos / límites:**
+- Sin Realtime: la notificación se evalúa al ENTRAR a `/grupos/mi` (no en vivo).
+  Para "entra/actualiza en vivo" se necesitaría suscripción Realtime — pendiente.
+- "Última visita" se guarda en localStorage por grupo; si no hay localStorage, la
+  notificación no persiste entre visitas.
 
-## MSG-005 — Puente oportunista
-(pendiente de construir)
+**Verificar manualmente (2 dispositivos / navegador):**
+- [ ] Dispositivo A crea/lee alerta → Dispositivo B (miembro) abre `/grupos/mi` y
+      ve la alerta y la notificación de actividad nueva.
+- [ ] Confirmar en Supabase que NO se duplican filas (mismo `grupo_id,codigo_corto`).
+- [ ] Confirmar que un NO-miembro no logra escribir (RLS) y que la UI no se rompe.
 
 ## MSG-004 — Estados + tablero por grupo
 (pendiente de construir)

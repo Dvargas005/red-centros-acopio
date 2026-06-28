@@ -2,13 +2,16 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { decodeSms, decrementarTTL } from "@/lib/sms-protocol";
+import { supabase, supabaseConfigured, asegurarSesion } from "@/lib/supabase";
 import {
   leerGrupoActivo, buscarMiembroPorTel, alertaYaVista, marcarAlertaVista,
   guardarAlertaLocal, leerAlertasLocales, actualizarEstadoLocal,
   type GrupoActivo, type Miembro,
 } from "@/lib/cache";
 import {
-  describirAlerta, mapaUrl, haceCuanto, smsLink, type Alerta, type EstadoAlerta,
+  describirAlerta, mapaUrl, haceCuanto, smsLink,
+  upsertAlertaContenido, cambiarEstado, hayConexion,
+  type Alerta, type EstadoAlerta,
 } from "@/lib/alertas";
 
 export default function LeerPage() {
@@ -18,6 +21,7 @@ export default function LeerPage() {
   const [tel, setTel] = useState("");
   const [estatus, setEstatus] = useState<string | null>(null);
   const [registrado, setRegistrado] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const { grupo: g, miembros: m } = leerGrupoActivo();
@@ -28,7 +32,26 @@ export default function LeerPage() {
       const m2 = new URLSearchParams(window.location.search).get("m");
       if (m2) setTexto(m2);
     }
+    // Sesión (anónima) para poder hacer el puente silencioso a la nube.
+    if (supabaseConfigured) {
+      asegurarSesion().then(setUserId).catch(() => { /* sin sesión: no hay puente */ });
+    }
   }, []);
+
+  // MSG-005 — Puente oportunista: si hay conexión y sesión de miembro, sube la
+  // alerta a la nube en silencio. Falla sin ruido (RLS / no-miembro / red).
+  async function bridgear(payload: Alerta, op: string, estado: EstadoAlerta) {
+    if (!grupo || !supabaseConfigured || !hayConexion() || !userId) return;
+    try {
+      if (op === "E") {
+        await cambiarEstado(grupo.id, payload.codigo_corto, estado, { emisor_id: userId });
+      } else {
+        await upsertAlertaContenido(payload);
+      }
+    } catch {
+      /* silencio: el registro local ya quedó hecho */
+    }
+  }
 
   const decoded = useMemo(() => decodeSms(texto), [texto]);
   const reenvio = useMemo(() => (texto ? decrementarTTL(texto) : null), [texto]);
@@ -67,14 +90,18 @@ export default function LeerPage() {
 
     if (decoded.op === "E") {
       // Cambio de estado de una alerta existente (o la crea mínima si no estaba).
+      const nueva: Alerta = {
+        codigo_corto: decoded.id, grupo_id: grupo.id, estado: estadoEntrante,
+        creado_en: existente?.creado_en ?? new Date().toISOString(),
+      };
       if (existente) {
         actualizarEstadoLocal(grupo.id, decoded.id, estadoEntrante);
         setEstatus(`Estado actualizado a ${estadoEntrante}.`);
       } else {
-        const nueva: Alerta = { codigo_corto: decoded.id, grupo_id: grupo.id, estado: estadoEntrante, creado_en: new Date().toISOString() };
         guardarAlertaLocal(nueva);
         setEstatus(`Estado registrado: ${estadoEntrante}.`);
       }
+      void bridgear(nueva, "E", estadoEntrante);
     } else {
       // Contenido de alerta (S/N/I).
       const alerta: Alerta = {
@@ -91,6 +118,7 @@ export default function LeerPage() {
       };
       guardarAlertaLocal(alerta);
       setEstatus(existente ? "Alerta actualizada." : "Alerta recibida y guardada.");
+      void bridgear(alerta, decoded.op, "ABIERTA");
     }
 
     marcarAlertaVista(decoded.id);

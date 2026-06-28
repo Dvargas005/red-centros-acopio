@@ -15,6 +15,7 @@ const K_GRUPO = "rx_grupo_activo";
 const K_MIEMBROS = "rx_miembros";
 const K_VISTAS = "rx_alertas_vistas";
 const K_ALERTAS = "rx_alertas";
+const K_ULTIMA_VISTA = "rx_ultima_vista_tablero";
 
 export type GrupoActivo = {
   id: string;
@@ -130,5 +131,21 @@ export function actualizarEstadoLocal(grupoId: string, codigoCorto: string, esta
     }
   } catch {
     /* sin localStorage: nada que actualizar */
+  }
+}
+
+// ---------- Última actividad vista en el tablero (para notificación) ----------
+export function leerUltimaVistaTablero(grupoId: string): string | null {
+  const map = leerJSON<Record<string, string>>(K_ULTIMA_VISTA, {});
+  return map[grupoId] ?? null;
+}
+
+export function guardarUltimaVistaTablero(grupoId: string, iso: string): void {
+  try {
+    const map = leerJSON<Record<string, string>>(K_ULTIMA_VISTA, {});
+    map[grupoId] = iso;
+    escribirJSON(K_ULTIMA_VISTA, map);
+  } catch {
+    /* sin localStorage: la notificación no persistirá entre visitas */
   }
 }

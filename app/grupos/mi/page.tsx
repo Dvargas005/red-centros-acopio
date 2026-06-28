@@ -5,13 +5,28 @@ import { useRouter } from "next/navigation";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import {
   leerGrupoActivo, guardarGrupoActivo, limpiarGrupoActivo,
+  leerAlertasLocales, guardarAlertaLocal,
+  leerUltimaVistaTablero, guardarUltimaVistaTablero,
   type GrupoActivo, type Miembro,
 } from "@/lib/cache";
+import {
+  fetchAlertasGrupo, haceCuanto, hayConexion, type Alerta,
+} from "@/lib/alertas";
 
 const TIPO_LABEL: Record<string, string> = {
   FAMILIA_VECINOS: "Familia / Vecinos",
   RESCATE: "Rescate",
 };
+
+// Timestamp más reciente (subido_en o creado_en) de una lista de alertas.
+function ultimaActividad(list: Alerta[]): string | null {
+  let max: string | null = null;
+  for (const a of list) {
+    const t = a.subido_en || a.creado_en;
+    if (t && (!max || t > max)) max = t;
+  }
+  return max;
+}
 
 export default function MiGrupoPage() {
   const router = useRouter();
@@ -19,6 +34,10 @@ export default function MiGrupoPage() {
   const [miembros, setMiembros] = useState<Miembro[]>([]);
   const [copiado, setCopiado] = useState(false);
   const [cargado, setCargado] = useState(false);
+
+  // Tablero de alertas + notificación de actividad nueva (MSG-004 / MSG-005).
+  const [alertas, setAlertas] = useState<Alerta[]>([]);
+  const [notif, setNotif] = useState<string | null>(null);
 
   // Estado de la cuenta para la sección opcional de vincular correo.
   const [esAnonimo, setEsAnonimo] = useState(false);
@@ -33,17 +52,19 @@ export default function MiGrupoPage() {
     const { grupo: g, miembros: m } = leerGrupoActivo();
     setGrupo(g);
     setMiembros(m);
+    if (g) setAlertas(leerAlertasLocales(g.id));
     setCargado(true);
 
     if (!supabaseConfigured) return;
 
     // 2) Lee la cuenta actual (anónima / con correo) y, si hay datos, refresca
-    //    miembros desde Supabase.
+    //    miembros y alertas desde Supabase.
     supabase.auth.getUser().then(({ data }) => {
       const user = data.user;
       if (!user) return;
       setEsAnonimo(user.is_anonymous === true);
       setTieneEmail(!!user.email);
+      if (g) refrescarAlertas(g);
 
       if (g) {
         supabase
@@ -60,6 +81,23 @@ export default function MiGrupoPage() {
       }
     });
   }, []);
+
+  // Trae las alertas del grupo desde la nube, las cachea y calcula si hay
+  // actividad nueva desde la última visita (notificación con timestamp).
+  async function refrescarAlertas(g: GrupoActivo) {
+    if (!supabaseConfigured || !hayConexion()) return;
+    const nube = await fetchAlertasGrupo(g.id);
+    if (!nube.length) return;
+    nube.forEach((a) => guardarAlertaLocal(a));
+    setAlertas(nube);
+
+    const max = ultimaActividad(nube);
+    const prev = leerUltimaVistaTablero(g.id);
+    if (prev && max && max > prev) {
+      setNotif(`Nueva actividad en el grupo · ${haceCuanto(max)}`);
+    }
+    if (max) guardarUltimaVistaTablero(g.id, max);
+  }
 
   // Vincula un correo a la cuenta anónima para recuperar el acceso en otro
   // dispositivo. Supabase envía un enlace de confirmación al correo indicado.
@@ -122,10 +160,33 @@ export default function MiGrupoPage() {
         <p className="text-sm text-white/60">{TIPO_LABEL[grupo.tipo] ?? grupo.tipo}</p>
       </header>
 
+      {notif && (
+        <div className="card border-accent">
+          <p className="text-sm text-accent">🔔 {notif}</p>
+        </div>
+      )}
+
       <Link href="/alertas/nueva" className="btn bg-danger text-white w-full text-lg py-5 font-bold">
         🆘 SOS — Enviar alerta
       </Link>
       <Link href="/leer" className="btn-ghost w-full">📥 Leer una alerta recibida</Link>
+
+      {/* Tablero de alertas (se enriquece con estados/acciones en MSG-004). */}
+      <div>
+        <p className="label">Alertas del grupo ({alertas.length})</p>
+        <div className="grid gap-2">
+          {alertas.length === 0 && (
+            <p className="text-sm text-white/50">Sin alertas registradas en este dispositivo.</p>
+          )}
+          {alertas.map((a, i) => (
+            <div key={a.id ?? a.codigo_corto ?? i} className="card py-3">
+              <p className="font-medium">{a.estado}</p>
+              {a.descripcion && <p className="text-sm text-white/60">{a.descripcion}</p>}
+              <p className="text-xs text-white/40">{haceCuanto(a.subido_en || a.creado_en)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="card flex items-center justify-between gap-3">
         <div>
