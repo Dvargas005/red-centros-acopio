@@ -105,6 +105,20 @@ create table if not exists alerta_estado_historial (
 create index if not exists idx_historial_alerta on alerta_estado_historial(alerta_id, creado_en);
 
 -- =============================================================
+--  FUNCIÓN es_miembro — rompe la recursión infinita de RLS (42P17)
+--  Las políticas de grupos / grupo_miembros / alertas se referenciaban
+--  entre sí (subconsultas a grupo_miembros dentro de la policy de
+--  grupo_miembros, etc.), lo que provocaba recursión infinita.
+--  SECURITY DEFINER hace que la consulta interna NO vuelva a evaluar RLS,
+--  cortando el ciclo. Debe declararse ANTES de las políticas que la usan.
+-- =============================================================
+create or replace function es_miembro(p_grupo uuid)
+returns boolean language sql security definer set search_path = public as $$
+  select exists (select 1 from grupo_miembros where grupo_id = p_grupo and perfil_id = auth.uid());
+$$;
+grant execute on function es_miembro(uuid) to anon, authenticated;
+
+-- =============================================================
 --  ROW LEVEL SECURITY
 --  Grupos cerrados: todo el acceso pasa por pertenencia al grupo.
 -- =============================================================
@@ -114,24 +128,32 @@ alter table grupo_miembros          enable row level security;
 alter table alertas                 enable row level security;
 alter table alerta_estado_historial enable row level security;
 
+-- =============================================================
+--  PERMISOS DE TABLA (necesarios tras recrear el schema)
+--  El "drop schema public cascade" borra los grants por defecto que
+--  Supabase concede a anon/authenticated. Sin estos GRANTs, RLS nunca
+--  llega a evaluarse: el acceso se niega a nivel de permiso de tabla.
+--  (RLS sigue siendo la barrera real de seguridad fila-a-fila.)
+-- =============================================================
+grant usage on schema public to anon, authenticated;
+grant all on all tables in schema public to anon, authenticated;
+grant all on all sequences in schema public to anon, authenticated;
+alter default privileges in schema public grant all on tables to anon, authenticated;
+alter default privileges in schema public grant all on sequences to anon, authenticated;
+
 -- ----- PERFILES (propios) -----
 create policy perfiles_select_own on perfiles
   for select using (auth.uid() = id);
 create policy perfiles_insert_own on perfiles
   for insert with check (auth.uid() = id);
 create policy perfiles_update_own on perfiles
-  for update using (auth.uid() = id);
+  for update to authenticated
+  using (auth.uid() = id) with check (auth.uid() = id);
 
 -- ----- GRUPOS -----
 -- Lectura para autenticados que sean miembros o el creador del grupo.
 create policy grupos_select_member on grupos
-  for select to authenticated using (
-    creador_id = auth.uid()
-    or exists (
-      select 1 from grupo_miembros m
-      where m.grupo_id = grupos.id and m.perfil_id = auth.uid()
-    )
-  );
+  for select to authenticated using (creador_id = auth.uid() or es_miembro(id));
 -- Crear: el creador debe ser el usuario actual.
 create policy grupos_insert_creator on grupos
   for insert to authenticated with check (creador_id = auth.uid());
@@ -144,12 +166,7 @@ create policy grupos_delete_creator on grupos
 -- ----- GRUPO_MIEMBROS -----
 -- Ver miembros solo si el usuario actual es miembro del mismo grupo.
 create policy grupo_miembros_select_comember on grupo_miembros
-  for select to authenticated using (
-    exists (
-      select 1 from grupo_miembros m
-      where m.grupo_id = grupo_miembros.grupo_id and m.perfil_id = auth.uid()
-    )
-  );
+  for select to authenticated using (perfil_id = auth.uid() or es_miembro(grupo_id));
 -- Unirse: el usuario solo puede insertarse a sí mismo.
 create policy grupo_miembros_insert_self on grupo_miembros
   for insert to authenticated with check (perfil_id = auth.uid());
@@ -157,26 +174,11 @@ create policy grupo_miembros_insert_self on grupo_miembros
 -- ----- ALERTAS -----
 -- Ver / crear / actualizar para miembros del grupo de la alerta.
 create policy alertas_select_member on alertas
-  for select to authenticated using (
-    exists (
-      select 1 from grupo_miembros m
-      where m.grupo_id = alertas.grupo_id and m.perfil_id = auth.uid()
-    )
-  );
+  for select to authenticated using (es_miembro(grupo_id));
 create policy alertas_insert_member on alertas
-  for insert to authenticated with check (
-    exists (
-      select 1 from grupo_miembros m
-      where m.grupo_id = alertas.grupo_id and m.perfil_id = auth.uid()
-    )
-  );
+  for insert to authenticated with check (es_miembro(grupo_id));
 create policy alertas_update_member on alertas
-  for update to authenticated using (
-    exists (
-      select 1 from grupo_miembros m
-      where m.grupo_id = alertas.grupo_id and m.perfil_id = auth.uid()
-    )
-  );
+  for update to authenticated using (es_miembro(grupo_id)) with check (es_miembro(grupo_id));
 
 -- ----- ALERTA_ESTADO_HISTORIAL (append-only) -----
 -- Ver / insertar para miembros del grupo de la alerta. Sin update/delete.
@@ -184,15 +186,13 @@ create policy historial_select_member on alerta_estado_historial
   for select to authenticated using (
     exists (
       select 1 from alertas a
-      join grupo_miembros m on m.grupo_id = a.grupo_id
-      where a.id = alerta_estado_historial.alerta_id and m.perfil_id = auth.uid()
+      where a.id = alerta_estado_historial.alerta_id and es_miembro(a.grupo_id)
     )
   );
 create policy historial_insert_member on alerta_estado_historial
   for insert to authenticated with check (
     exists (
       select 1 from alertas a
-      join grupo_miembros m on m.grupo_id = a.grupo_id
-      where a.id = alerta_estado_historial.alerta_id and m.perfil_id = auth.uid()
+      where a.id = alerta_estado_historial.alerta_id and es_miembro(a.grupo_id)
     )
   );
