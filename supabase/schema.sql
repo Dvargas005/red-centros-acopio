@@ -20,6 +20,12 @@
 --  (La función RPC 'upsert_alerta' se agregará en el paso del puente.)
 -- =============================================================
 
+-- ---------- RESETEO TOTAL (peligroso) ----------
+-- Descomentar SOLO para recrear desde cero. BORRA TODOS LOS DATOS.
+-- drop schema public cascade;
+-- create schema public;
+-- grant usage on schema public to anon, authenticated, service_role;
+
 create extension if not exists "uuid-ossp";
 
 -- ---------- ENUMS ----------

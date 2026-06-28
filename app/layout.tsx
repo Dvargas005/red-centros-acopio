@@ -2,8 +2,8 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Red de Centros de Acopio",
-  description: "Coordinacion abierta de donaciones y centros de acopio en emergencia.",
+  title: "Malla de mensajería de emergencia",
+  description: "Grupos cerrados para coordinar alertas de emergencia con tu familia, vecinos o equipo de rescate.",
   manifest: "/manifest.webmanifest",
 };
 export const viewport: Viewport = {

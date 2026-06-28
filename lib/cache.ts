@@ -57,6 +57,16 @@ export function leerGrupoActivo(): { grupo: GrupoActivo | null; miembros: Miembr
   };
 }
 
+// Limpia solo la cache local del grupo activo (no toca la DB).
+export function limpiarGrupoActivo(): void {
+  try {
+    localStorage.removeItem(K_GRUPO);
+    localStorage.removeItem(K_MIEMBROS);
+  } catch {
+    /* localStorage no disponible: nada que limpiar */
+  }
+}
+
 // Resuelve un teléfono a un nombre conocido del grupo (o undefined).
 export function buscarMiembroPorTel(tel: string): string | undefined {
   const objetivo = normalizarTel(tel);

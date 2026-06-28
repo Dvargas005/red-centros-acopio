@@ -1,72 +1,63 @@
-// NOTA (pivote RX1): este home se reescribirá en el PASO 2. El contenido
-// actual es del proyecto de "centros de acopio" y quedará reemplazado por
-// la malla de mensajería de emergencia por grupos cerrados. No tocar la UI
-// en el paso de fundación.
+"use client";
 import Link from "next/link";
-
-const ROLES = [
-  {
-    href: "/donar",
-    titulo: "Quiero donar",
-    desc: "Dime qué tienes y dónde estás. Te muestro los centros más cercanos. Anónimo.",
-    emoji: "📦",
-  },
-  {
-    href: "/empresa",
-    titulo: "Soy empresa",
-    desc: "Donación en volumen. Coordinamos logística con el centro adecuado.",
-    emoji: "🏢",
-  },
-  {
-    href: "/apoyar",
-    titulo: "Quiero apoyar",
-    desc: "Sé voluntario. Verás centros que necesitan manos y el contacto del organizador.",
-    emoji: "🤝",
-  },
-  {
-    href: "/crear-centro",
-    titulo: "Crear centro de acopio",
-    desc: "Registra tu punto de recolección: ubicación, horarios y qué necesitas.",
-    emoji: "📍",
-  },
-  {
-    href: "/developer",
-    titulo: "Soy developer",
-    desc: "Documentación técnica, specs y cómo replicar este proyecto.",
-    emoji: "💻",
-  },
-];
+import { useEffect, useState } from "react";
+import { leerGrupoActivo, type GrupoActivo } from "@/lib/cache";
 
 export default function Home() {
+  const [grupo, setGrupo] = useState<GrupoActivo | null>(null);
+
+  // El grupo activo vive en localStorage (cache.ts ya tolera su ausencia).
+  useEffect(() => {
+    setGrupo(leerGrupoActivo().grupo);
+  }, []);
+
   return (
     <div className="space-y-6">
       <header className="space-y-2">
-        <h1 className="text-2xl font-bold leading-tight">Red de Centros de Acopio</h1>
+        <h1 className="text-2xl font-bold leading-tight">Malla de mensajería de emergencia</h1>
         <p className="text-white/60 text-sm">
-          Coordinación abierta de ayuda en emergencia. Sin marca, sin costo, replicable.
+          Coordínate con tu familia, vecinos o equipo de rescate en un grupo cerrado.
+          Alertas claras, aunque la red esté caída.
         </p>
       </header>
 
       <nav className="grid gap-3">
-        {ROLES.map((r) => (
-          <Link key={r.href} href={r.href} className="card hover:border-accent transition block">
+        {grupo && (
+          <Link href="/grupos/mi" className="card hover:border-accent transition block">
             <div className="flex items-start gap-3">
-              <span className="text-2xl" aria-hidden>{r.emoji}</span>
+              <span className="text-2xl" aria-hidden>👥</span>
               <span>
-                <span className="block font-semibold">{r.titulo}</span>
-                <span className="block text-sm text-white/60">{r.desc}</span>
+                <span className="block font-semibold">Mi grupo</span>
+                <span className="block text-sm text-white/60">{grupo.nombre} · código {grupo.codigo}</span>
               </span>
             </div>
           </Link>
-        ))}
+        )}
+
+        <Link href="/grupos/crear" className="card hover:border-accent transition block">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl" aria-hidden>➕</span>
+            <span>
+              <span className="block font-semibold">Crear grupo</span>
+              <span className="block text-sm text-white/60">Abre un grupo cerrado y comparte el código con los tuyos.</span>
+            </span>
+          </div>
+        </Link>
+
+        <Link href="/grupos/unirse" className="card hover:border-accent transition block">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl" aria-hidden>🔑</span>
+            <span>
+              <span className="block font-semibold">Unirme a un grupo</span>
+              <span className="block text-sm text-white/60">Tienes un código de 6 caracteres o un enlace de invitación.</span>
+            </span>
+          </div>
+        </Link>
       </nav>
 
-      <footer className="pt-2 flex flex-col items-center gap-2">
-        <Link href="/apoyar" className="text-sm text-accent underline">
-          Ver mapa de necesidades entre centros
-        </Link>
-        <Link href="/actualizar" className="text-sm text-white/50 underline">
-          Soy organizador: actualizar mi centro por SMS
+      <footer className="pt-2 flex justify-center">
+        <Link href="/developer" className="text-sm text-white/50 underline">
+          Soy developer: documentación técnica
         </Link>
       </footer>
     </div>
