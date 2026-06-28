@@ -3,15 +3,27 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
+import { encodeSms } from "@/lib/sms-protocol";
 import {
   leerGrupoActivo, guardarGrupoActivo, limpiarGrupoActivo,
-  leerAlertasLocales, guardarAlertaLocal,
+  leerAlertasLocales, guardarAlertaLocal, actualizarEstadoLocal,
   leerUltimaVistaTablero, guardarUltimaVistaTablero,
   type GrupoActivo, type Miembro,
 } from "@/lib/cache";
 import {
-  fetchAlertasGrupo, haceCuanto, hayConexion, type Alerta,
+  fetchAlertasGrupo, fetchHistorial, cambiarEstado,
+  describirAlerta, mapaUrl, haceCuanto, hayConexion, smsLink,
+  ESTADO_BADGE, ESTADO_LABEL,
+  type Alerta, type EstadoAlerta, type HistorialFila,
 } from "@/lib/alertas";
+
+// Acciones de estado disponibles desde una alerta.
+const ACCIONES: { estado: EstadoAlerta; label: string }[] = [
+  { estado: "EN_ATENCION", label: "Voy en camino" },
+  { estado: "RESUELTA", label: "Resuelta" },
+  { estado: "CANCELADA", label: "Cancelar" },
+  { estado: "FALSA_ALARMA", label: "Falsa alarma" },
+];
 
 const TIPO_LABEL: Record<string, string> = {
   FAMILIA_VECINOS: "Familia / Vecinos",
@@ -38,6 +50,11 @@ export default function MiGrupoPage() {
   // Tablero de alertas + notificación de actividad nueva (MSG-004 / MSG-005).
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [notif, setNotif] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [expandida, setExpandida] = useState<string | null>(null);
+  const [historial, setHistorial] = useState<Record<string, HistorialFila[]>>({});
+  const [difusion, setDifusion] = useState<{ codigo: string; sms: string } | null>(null);
+  const [accionError, setAccionError] = useState<string | null>(null);
 
   // Estado de la cuenta para la sección opcional de vincular correo.
   const [esAnonimo, setEsAnonimo] = useState(false);
@@ -62,6 +79,7 @@ export default function MiGrupoPage() {
     supabase.auth.getUser().then(({ data }) => {
       const user = data.user;
       if (!user) return;
+      setUserId(user.id);
       setEsAnonimo(user.is_anonymous === true);
       setTieneEmail(!!user.email);
       if (g) refrescarAlertas(g);
@@ -97,6 +115,42 @@ export default function MiGrupoPage() {
       setNotif(`Nueva actividad en el grupo · ${haceCuanto(max)}`);
     }
     if (max) guardarUltimaVistaTablero(g.id, max);
+  }
+
+  // Expandir/colapsar una alerta y, al expandir, traer su historial.
+  async function alternarExpandir(a: Alerta) {
+    const code = a.codigo_corto;
+    if (expandida === code) { setExpandida(null); return; }
+    setExpandida(code);
+    if (a.id && supabaseConfigured && hayConexion() && !historial[code]) {
+      const filas = await fetchHistorial(a.id);
+      setHistorial((h) => ({ ...h, [code]: filas }));
+    }
+  }
+
+  // Cambia el estado: actualiza local + nube e instala la difusión por SMS.
+  async function cambiar(a: Alerta, estado: EstadoAlerta) {
+    if (!grupo) return;
+    setAccionError(null);
+
+    // SMS de difusión: RX1 <id> E <estado>.
+    const sms = encodeSms({ id: a.codigo_corto, op: "E", estado });
+    setDifusion({ codigo: a.codigo_corto, sms });
+
+    // Local primero (funciona offline).
+    actualizarEstadoLocal(grupo.id, a.codigo_corto, estado);
+    setAlertas((prev) => prev.map((x) => (x.codigo_corto === a.codigo_corto ? { ...x, estado } : x)));
+
+    // Nube + historial si hay datos y sesión.
+    if (supabaseConfigured && hayConexion() && userId) {
+      const r = await cambiarEstado(grupo.id, a.codigo_corto, estado, { emisor_id: userId });
+      if (!r.ok) {
+        setAccionError("No se pudo guardar el cambio en la nube; quedó local. Difúndelo por SMS.");
+      } else if (r.id) {
+        const filas = await fetchHistorial(r.id);
+        setHistorial((h) => ({ ...h, [a.codigo_corto]: filas }));
+      }
+    }
   }
 
   // Vincula un correo a la cuenta anónima para recuperar el acceso en otro
@@ -171,20 +225,85 @@ export default function MiGrupoPage() {
       </Link>
       <Link href="/leer" className="btn-ghost w-full">📥 Leer una alerta recibida</Link>
 
-      {/* Tablero de alertas (se enriquece con estados/acciones en MSG-004). */}
+      {/* Tablero de alertas por estado. */}
       <div>
         <p className="label">Alertas del grupo ({alertas.length})</p>
         <div className="grid gap-2">
           {alertas.length === 0 && (
             <p className="text-sm text-white/50">Sin alertas registradas en este dispositivo.</p>
           )}
-          {alertas.map((a, i) => (
-            <div key={a.id ?? a.codigo_corto ?? i} className="card py-3">
-              <p className="font-medium">{a.estado}</p>
-              {a.descripcion && <p className="text-sm text-white/60">{a.descripcion}</p>}
-              <p className="text-xs text-white/40">{haceCuanto(a.subido_en || a.creado_en)}</p>
-            </div>
-          ))}
+          {alertas.map((a, i) => {
+            const code = a.codigo_corto;
+            const abierta = expandida === code;
+            const mapa = mapaUrl(a.lat, a.lng);
+            return (
+              <div key={a.id ?? code ?? i} className="card space-y-2">
+                <button className="w-full text-left flex items-start justify-between gap-2"
+                  onClick={() => alternarExpandir(a)}>
+                  <span>
+                    <span className="block font-medium">{describirAlerta(a)}</span>
+                    {a.descripcion && <span className="block text-sm text-white/60">{a.descripcion}</span>}
+                    <span className="block text-xs text-white/40">{haceCuanto(a.subido_en || a.creado_en)}</span>
+                  </span>
+                  <span className={`chip shrink-0 ${ESTADO_BADGE[a.estado]}`}>{ESTADO_LABEL[a.estado]}</span>
+                </button>
+
+                {abierta && (
+                  <div className="space-y-3 border-t border-line pt-3">
+                    {mapa && (
+                      <a className="btn-ghost text-sm" href={mapa} target="_blank" rel="noreferrer">Ver en mapa</a>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {ACCIONES.map((acc) => (
+                        <button key={acc.estado} onClick={() => cambiar(a, acc.estado)}
+                          className={`chip ${a.estado === acc.estado ? "bg-accent text-black border-accent" : "text-white/70"}`}>
+                          {acc.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {accionError && difusion?.codigo === code && (
+                      <p className="text-sm text-warn">{accionError}</p>
+                    )}
+
+                    {/* Difusión del cambio de estado por SMS. */}
+                    {difusion?.codigo === code && (
+                      <div className="space-y-2">
+                        <p className="label mb-0">Difundir cambio por SMS</p>
+                        <code className="block bg-base border border-line rounded-lg p-2 text-xs break-words">{difusion.sms}</code>
+                        {miembros.filter((m) => m.telefono).length === 0 && (
+                          <p className="text-xs text-white/50">No hay teléfonos de miembros en este dispositivo.</p>
+                        )}
+                        {miembros.filter((m) => m.telefono).map((m, j) => (
+                          <a key={m.perfil_id ?? j} className="btn-ghost text-sm w-full" href={smsLink(m.telefono, difusion.sms)}>
+                            SMS a {m.nombre || m.telefono}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Historial de estado. */}
+                    <div>
+                      <p className="label mb-1">Historial</p>
+                      {(historial[code] ?? []).length === 0 ? (
+                        <p className="text-xs text-white/40">Sin historial disponible (offline o sin cambios).</p>
+                      ) : (
+                        <ul className="space-y-1">
+                          {(historial[code] ?? []).map((h, k) => (
+                            <li key={k} className="text-xs text-white/60">
+                              {ESTADO_LABEL[h.estado] ?? h.estado} · {haceCuanto(h.creado_en)}
+                              {h.nota ? ` · ${h.nota}` : ""}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 

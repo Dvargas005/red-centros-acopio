@@ -94,4 +94,56 @@
 - [ ] Confirmar que un NO-miembro no logra escribir (RLS) y que la UI no se rompe.
 
 ## MSG-004 — Estados + tablero por grupo
-(pendiente de construir)
+**Construido (en `app/grupos/mi`):**
+- Tablero de alertas del grupo (de la nube si hay datos; offline desde caché +
+  recibidas). Cada alerta muestra descripción legible, timestamp y badge de
+  estado con color: ABIERTA rojo, EN_ATENCION naranja, RESUELTA verde,
+  CANCELADA/FALSA_ALARMA gris.
+- Al expandir una alerta: enlace "Ver en mapa" (si hay coords), botones de
+  estado ('Voy en camino' → EN_ATENCION, 'Resuelta', 'Cancelar', 'Falsa alarma'),
+  e historial de estado.
+- Cada cambio de estado: genera el SMS `RX1 <id> E <estado>` para difundir al
+  grupo (enlaces `sms:` por miembro) Y, si hay datos, actualiza `alertas.estado`
+  e inserta una fila en `alerta_estado_historial` (vía `cambiarEstado`).
+
+**Supuestos / límites:**
+- El "color naranja" de EN_ATENCION usa el token `accent` (#ff6b35) de la paleta.
+- El historial se carga al expandir (requiere conexión); offline muestra aviso.
+
+**Verificar manualmente (navegador / 2 dispositivos):**
+- [ ] Cambiar estado de una alerta y confirmar: color del badge, fila nueva en
+      `alerta_estado_historial`, y que aparecen los enlaces SMS de difusión.
+- [ ] Confirmar que el tablero se ve correcto offline (desde caché).
+
+---
+
+# RESUMEN — qué debes verificar/ejecutar tú (en orden)
+1. [ ] **Esquema**: confirmar que `supabase/schema.sql` está aplicado completo en el
+       proyecto Supabase (incluye tablas `alertas`/`alerta_estado_historial`, la
+       función `es_miembro` y los grants). **No hay SQL nuevo** en MSG-002..005.
+2. [ ] **Anonymous sign-ins**: confirmar que está habilitado (ya lo activaste).
+3. [ ] **Env vars** en el despliegue: `NEXT_PUBLIC_SUPABASE_URL`,
+       `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`.
+4. [ ] **Flujo composer (MSG-002)** en navegador: crear alerta con/sin ubicación;
+       ver fila en `alertas`; probar offline (DevTools) → outbox.
+5. [ ] **Flujo lectura (MSG-003)**: pegar RX1 de alerta y de estado; dedup; reenvío
+       que decrementa TTL.
+6. [ ] **DECISIÓN DE PRODUCTO (MSG-003)**: cómo resolver la identidad del remitente
+       en el pegado (ver sección MSG-003). **Pendiente de tu decisión.**
+7. [ ] **Puente + notificación (MSG-005)** con 2 dispositivos/cuentas: A escribe,
+       B (miembro) ve la alerta y la notificación; sin duplicados; no-miembro
+       bloqueado por RLS sin romper UI.
+8. [ ] **Estados + historial (MSG-004)**: cambiar estado, ver color e historial,
+       difundir por SMS.
+9. [ ] **Outbox**: hoy se encola sin red, pero el *flush* automático al reconectar
+       NO está cableado a una pantalla. Decidir dónde dispararlo (p. ej. al abrir
+       `/grupos/mi` online). **Pendiente.**
+10. [ ] **SMS real** entre teléfonos (requiere 2 dispositivos) — no verificable por mí.
+11. [ ] **Tiempo real**: la notificación es al entrar a `/grupos/mi`, no en vivo.
+        Si se quiere en vivo, agregar Supabase Realtime. **Pendiente de decisión.**
+
+## Estado de build/commit por módulo
+- MSG-002: build verde ✅ · commit+push ✅
+- MSG-003: build verde ✅ · commit+push ✅
+- MSG-005: build verde ✅ · commit+push ✅
+- MSG-004: build verde ✅ · commit+push ✅
