@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { background: #0b0f14; color: #e7edf3; }
+
+/* Componentes utilitarios reutilizables */
+.card { @apply bg-surface border border-line rounded-xl p-4; }
+.btn  { @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium transition active:scale-[.98]; }
+.btn-accent { @apply btn bg-accent text-black; }
+.btn-ghost  { @apply btn border border-line text-white; }
+.input { @apply w-full bg-base border border-line rounded-lg px-3 py-3 text-white placeholder:text-white/40 outline-none focus:border-accent; }
+.label { @apply block text-sm text-white/70 mb-1; }
+.chip  { @apply text-xs px-2 py-1 rounded-full border border-line; }
