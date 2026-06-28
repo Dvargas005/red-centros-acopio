@@ -122,6 +122,10 @@ export default function MiGrupoPage() {
         <p className="text-sm text-white/60">{TIPO_LABEL[grupo.tipo] ?? grupo.tipo}</p>
       </header>
 
+      <Link href="/alertas/nueva" className="btn bg-danger text-white w-full text-lg py-5 font-bold">
+        🆘 SOS — Enviar alerta
+      </Link>
+
       <div className="card flex items-center justify-between gap-3">
         <div>
           <p className="label mb-0">Código del grupo</p>

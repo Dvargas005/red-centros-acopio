@@ -9,10 +9,12 @@
 // =============================================================
 
 import { normalizarTel } from "./sms-protocol";
+import type { Alerta, EstadoAlerta } from "./alertas";
 
 const K_GRUPO = "rx_grupo_activo";
 const K_MIEMBROS = "rx_miembros";
 const K_VISTAS = "rx_alertas_vistas";
+const K_ALERTAS = "rx_alertas";
 
 export type GrupoActivo = {
   id: string;
@@ -95,5 +97,38 @@ export function alertaYaVista(id: string): boolean {
     return leerJSON<string[]>(K_VISTAS, []).includes(id);
   } catch {
     return false;
+  }
+}
+
+// ---------- Alertas locales (tablero offline + recibidas) ----------
+// Se guardan por codigo_corto para que el tablero funcione sin red y para
+// no perder lo recibido/creado mientras no se ha sincronizado.
+export function guardarAlertaLocal(a: Alerta): void {
+  try {
+    const lista = leerJSON<Alerta[]>(K_ALERTAS, []);
+    const i = lista.findIndex((x) => x.codigo_corto === a.codigo_corto && x.grupo_id === a.grupo_id);
+    if (i >= 0) lista[i] = { ...lista[i], ...a };
+    else lista.push(a);
+    escribirJSON(K_ALERTAS, lista);
+  } catch {
+    /* sin localStorage: el tablero se servirá solo de la nube */
+  }
+}
+
+export function leerAlertasLocales(grupoId?: string): Alerta[] {
+  const lista = leerJSON<Alerta[]>(K_ALERTAS, []);
+  return grupoId ? lista.filter((a) => a.grupo_id === grupoId) : lista;
+}
+
+export function actualizarEstadoLocal(grupoId: string, codigoCorto: string, estado: EstadoAlerta): void {
+  try {
+    const lista = leerJSON<Alerta[]>(K_ALERTAS, []);
+    const i = lista.findIndex((x) => x.codigo_corto === codigoCorto && x.grupo_id === grupoId);
+    if (i >= 0) {
+      lista[i] = { ...lista[i], estado };
+      escribirJSON(K_ALERTAS, lista);
+    }
+  } catch {
+    /* sin localStorage: nada que actualizar */
   }
 }

@@ -21,6 +21,13 @@ export default function Home() {
         </p>
       </header>
 
+      {grupo && (
+        <Link href="/alertas/nueva"
+          className="btn bg-danger text-white w-full text-lg py-5 font-bold">
+          🆘 SOS — Enviar alerta
+        </Link>
+      )}
+
       <nav className="grid gap-3">
         {grupo && (
           <Link href="/grupos/mi" className="card hover:border-accent transition block">
