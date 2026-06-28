@@ -60,6 +60,16 @@ export default function Home() {
             </span>
           </div>
         </Link>
+
+        <Link href="/leer" className="card hover:border-accent transition block">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl" aria-hidden>📥</span>
+            <span>
+              <span className="block font-semibold">Leer alerta recibida</span>
+              <span className="block text-sm text-white/60">Pega un SMS que te llegó para verlo claro y registrarlo.</span>
+            </span>
+          </div>
+        </Link>
       </nav>
 
       <footer className="pt-2 flex justify-center">

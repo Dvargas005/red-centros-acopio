@@ -125,6 +125,7 @@ export default function MiGrupoPage() {
       <Link href="/alertas/nueva" className="btn bg-danger text-white w-full text-lg py-5 font-bold">
         🆘 SOS — Enviar alerta
       </Link>
+      <Link href="/leer" className="btn-ghost w-full">📥 Leer una alerta recibida</Link>
 
       <div className="card flex items-center justify-between gap-3">
         <div>

@@ -42,6 +42,38 @@
 ---
 
 ## MSG-003 — Recepción + cadena
+**Construido:**
+- `app/leer/page.tsx`: pega el SMS (o `?m=` en la URL) → `decodeSms` → muestra
+  rol + caso legible + nota + "Ver en mapa" + "hace cuánto" + saltos restantes.
+- Campo opcional "¿de qué número llegó?" → `buscarMiembroPorTel`; si vacío o
+  desconocido → "remitente desconocido".
+- Dedup con `alertaYaVista(id)`: si ya se vio y el estado no cambió →
+  "Ya recibiste esta alerta"; si cambió (op E con estado distinto) → actualiza.
+- Reenvío en cadena: si `decrementarTTL` devuelve texto (TTL>1) muestra enlaces
+  `sms:` por miembro con el TTL decrementado; a TTL agotado no ofrece reenvío.
+- Enlaces a `/leer` desde home y `/grupos/mi`.
+
+**DECISIÓN DE UX PENDIENTE (no la tomo yo):**
+- [ ] **Identidad del remitente en el flujo de pegado.** Un SMS pegado NO trae el
+      número del remitente, así que por defecto queda "remitente desconocido"
+      salvo que el receptor escriba el número a mano. ¿Cómo resolver identidad de
+      forma fiable? Opciones a decidir: (a) pedir que el emisor incluya su número
+      en el cuerpo del RX1; (b) un id de emisor corto en el protocolo; (c)
+      aceptar "desconocido" como estado normal. **Requiere tu decisión de producto.**
+
+**Supuestos tomados:**
+- El SMS no incluye marca de tiempo; "hace cuánto" usa el `creado_en` que se fija
+  localmente la primera vez que se registra la alerta (si no, "recién recibido").
+
+**Verificar manualmente (navegador / 2 dispositivos):**
+- [ ] Pegar un RX1 de alerta (S) y uno de estado (E); confirmar lectura legible,
+      mapa, dedup y que el reenvío decrementa el TTL.
+- [ ] Probar el flujo real por SMS entre dos teléfonos (requiere 2 dispositivos).
+
+## MSG-005 — Puente oportunista
+(pendiente de construir)
+
+## MSG-004 — Estados + tablero por grupo
 (pendiente de construir)
 
 ## MSG-005 — Puente oportunista
