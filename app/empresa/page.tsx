@@ -5,6 +5,9 @@ import { supabase, CATEGORIAS, type Categoria } from "@/lib/supabase";
 import { enqueue } from "@/lib/offline";
 import CentroCard from "@/components/CentroCard";
 
+// Evita el prerender estatico: la pagina depende de Supabase en runtime.
+export const dynamic = "force-dynamic";
+
 type Centro = {
   id: string; nombre: string; direccion: string;
   ciudad: string | null; estado_geo: string | null; distancia_km: number | null;
@@ -19,12 +22,24 @@ export default function EmpresaPage() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [centros, setCentros] = useState<Centro[] | null>(null);
   const [estado, setEstado] = useState<"idle" | "ubicando" | "enviando" | "offline" | "error">("idle");
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   function ubicar() {
+    setGeoError(null);
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setEstado("idle");
+      setGeoError("Tu dispositivo no permite obtener la ubicación. Indica la dirección de origen a un coordinador.");
+      return;
+    }
     setEstado("ubicando");
     navigator.geolocation.getCurrentPosition(
       (p) => { setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }); setEstado("idle"); },
-      () => setEstado("error")
+      () => {
+        // No dejar el botón colgado en "Ubicando…": volvemos a idle y avisamos.
+        setEstado("idle");
+        setGeoError("No pudimos obtener tu ubicación. Revisa que diste permiso de ubicación e inténtalo de nuevo.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   }
 
@@ -70,6 +85,7 @@ export default function EmpresaPage() {
           <label className="label">Ubicación de origen</label>
           {coords ? <p className="text-sm text-ok">Ubicación lista ✓</p> :
             <button className="btn-ghost w-full" onClick={ubicar}>{estado === "ubicando" ? "Ubicando…" : "Usar mi ubicación"}</button>}
+          {geoError && <p className="text-sm text-danger mt-2">{geoError}</p>}
         </div>
         <button className="btn-accent w-full disabled:opacity-40"
           disabled={!empresa || !contacto || !categoria || !descripcion.trim() || !coords || estado === "enviando"}
@@ -81,8 +97,12 @@ export default function EmpresaPage() {
 
       {centros && (
         <section className="space-y-3 pt-2">
-          <h2 className="font-semibold">Centros sugeridos para coordinar</h2>
-          {centros.map((c) => <CentroCard key={c.id} c={c} />)}
+          <h2 className="font-semibold">
+            {centros.length ? "Centros sugeridos para coordinar" : "No hay centros activos cerca todavía"}
+          </h2>
+          {centros.length
+            ? centros.map((c) => <CentroCard key={c.id} c={c} />)
+            : <p className="text-sm text-white/60">Tu donación quedó registrada. Un coordinador te contactará para asignar un centro.</p>}
         </section>
       )}
     </div>

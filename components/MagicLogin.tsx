@@ -9,9 +9,14 @@ export default function MagicLogin({ titulo }: { titulo: string }) {
 
   async function enviar() {
     setError(null);
+    // URL pública configurable: usa NEXT_PUBLIC_SITE_URL en producción y cae al
+    // origin del navegador en local. Siempre apuntamos al origin (sin query params).
+    const redirectTo =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined" ? window.location.origin : undefined);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: typeof window !== "undefined" ? window.location.href : undefined },
+      options: { emailRedirectTo: redirectTo },
     });
     if (error) setError(error.message);
     else setEnviado(true);

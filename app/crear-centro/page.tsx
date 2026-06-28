@@ -4,6 +4,9 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import MagicLogin from "@/components/MagicLogin";
 
+// Evita el prerender estatico: la pagina depende de Supabase en runtime.
+export const dynamic = "force-dynamic";
+
 export default function CrearCentroPage() {
   const [sesion, setSesion] = useState<boolean | null>(null);
   const [uid, setUid] = useState<string | null>(null);
@@ -27,6 +30,10 @@ export default function CrearCentroPage() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: e.target.value });
 
+  // El teléfono debe tener al menos varios dígitos para ser contactable por WhatsApp.
+  const telDigitos = form.organizador_telefono.replace(/\D/g, "").length;
+  const telefonoValido = telDigitos >= 7;
+
   function ubicar() {
     navigator.geolocation.getCurrentPosition(
       (p) => setCoords({ lat: p.coords.latitude, lng: p.coords.longitude }),
@@ -36,6 +43,8 @@ export default function CrearCentroPage() {
 
   async function guardar() {
     if (!uid || !coords) return;
+    // No enviar con campos obligatorios vacíos o teléfono inválido.
+    if (!form.nombre || !form.organizador_nombre || !telefonoValido || !form.direccion) return;
     setEstado("guardando");
     // Asegura el perfil del organizador (upsert) antes de crear el centro.
     await supabase.from("perfiles").upsert({
@@ -72,7 +81,13 @@ export default function CrearCentroPage() {
         <div className="space-y-3">
           <div><label className="label">Nombre del centro</label><input className="input" value={form.nombre} onChange={set("nombre")} /></div>
           <div><label className="label">Tu nombre (organizador)</label><input className="input" value={form.organizador_nombre} onChange={set("organizador_nombre")} /></div>
-          <div><label className="label">Teléfono / WhatsApp</label><input className="input" value={form.organizador_telefono} onChange={set("organizador_telefono")} placeholder="+58…" /></div>
+          <div>
+            <label className="label">Teléfono / WhatsApp</label>
+            <input className="input" value={form.organizador_telefono} onChange={set("organizador_telefono")} placeholder="+58…" />
+            {form.organizador_telefono && !telefonoValido && (
+              <p className="text-xs text-warn mt-1">Ingresa un teléfono válido (al menos 7 dígitos).</p>
+            )}
+          </div>
           <div><label className="label">Dirección</label><input className="input" value={form.direccion} onChange={set("direccion")} /></div>
           <div className="grid grid-cols-2 gap-2">
             <div><label className="label">Ciudad</label><input className="input" value={form.ciudad} onChange={set("ciudad")} /></div>
@@ -85,7 +100,7 @@ export default function CrearCentroPage() {
               <button className="btn-ghost w-full" onClick={ubicar}>Marcar con mi ubicación actual</button>}
           </div>
           <button className="btn-accent w-full disabled:opacity-40"
-            disabled={!form.nombre || !form.organizador_nombre || !form.organizador_telefono || !form.direccion || !coords || estado === "guardando"}
+            disabled={!form.nombre || !form.organizador_nombre || !telefonoValido || !form.direccion || !coords || estado === "guardando"}
             onClick={guardar}>{estado === "guardando" ? "Guardando…" : "Registrar centro"}</button>
           {estado === "error" && <p className="text-sm text-danger">No se pudo guardar. Revisa los datos y la conexión.</p>}
         </div>

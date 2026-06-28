@@ -63,8 +63,11 @@ export default function ActualizarPage() {
       {sms && (
         <div className="card space-y-3">
           <div>
-            <p className="label">Mensaje a enviar ({sms.length}/160)</p>
+            <p className={`label ${sms.length > 160 ? "text-warn" : ""}`}>Mensaje a enviar ({sms.length}/160)</p>
             <code className="block bg-base border border-line rounded-lg p-3 text-sm break-words">{sms}</code>
+            {sms.length > 160 && (
+              <p className="text-xs text-warn mt-1">El mensaje supera 160 caracteres y podría enviarse en varios SMS. Acorta el detalle.</p>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <a href={smsLink} className="btn-accent w-full">Abrir SMS listo para enviar</a>

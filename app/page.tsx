@@ -25,6 +25,12 @@ const ROLES = [
     desc: "Registra tu punto de recolección: ubicación, horarios y qué necesitas.",
     emoji: "📍",
   },
+  {
+    href: "/developer",
+    titulo: "Soy developer",
+    desc: "Documentación técnica, specs y cómo replicar este proyecto.",
+    emoji: "💻",
+  },
 ];
 
 export default function Home() {

@@ -4,6 +4,9 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import MagicLogin from "@/components/MagicLogin";
 
+// Evita el prerender estatico: la pagina depende de Supabase en runtime.
+export const dynamic = "force-dynamic";
+
 type CentroAuth = {
   id: string; nombre: string; direccion: string; ciudad: string | null;
   estado_geo: string | null; organizador_nombre: string; organizador_telefono: string;
@@ -12,6 +15,8 @@ type CentroAuth = {
 export default function ApoyarPage() {
   const [sesion, setSesion] = useState<boolean | null>(null);
   const [centros, setCentros] = useState<CentroAuth[]>([]);
+  const [cargandoCentros, setCargandoCentros] = useState(false);
+  const [errorCentros, setErrorCentros] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSesion(!!data.session));
@@ -22,11 +27,17 @@ export default function ApoyarPage() {
   useEffect(() => {
     if (!sesion) return;
     // Centros activos: como autenticado, RLS permite ver el telefono del organizador.
+    setCargandoCentros(true);
+    setErrorCentros(null);
     supabase
       .from("centros")
       .select("id,nombre,direccion,ciudad,estado_geo,organizador_nombre,organizador_telefono")
       .eq("estado", "ACTIVO")
-      .then(({ data }) => setCentros((data as CentroAuth[]) ?? []));
+      .then(({ data, error }) => {
+        if (error) setErrorCentros("No se pudieron cargar los centros. Revisa tu conexión e inténtalo de nuevo.");
+        else setCentros((data as CentroAuth[]) ?? []);
+        setCargandoCentros(false);
+      });
   }, [sesion]);
 
   if (sesion === null) return <p className="text-white/50">Cargando…</p>;
@@ -41,6 +52,8 @@ export default function ApoyarPage() {
       ) : (
         <section className="space-y-3">
           <p className="text-sm text-white/60">Centros que necesitan manos. Contacta al organizador para coordinar.</p>
+          {cargandoCentros && <p className="text-sm text-white/60">Cargando centros…</p>}
+          {errorCentros && <p className="text-sm text-danger">{errorCentros}</p>}
           {centros.map((c) => (
             <div key={c.id} className="card space-y-1">
               <h3 className="font-semibold">{c.nombre}</h3>
@@ -53,7 +66,9 @@ export default function ApoyarPage() {
               </a>
             </div>
           ))}
-          {!centros.length && <p className="text-white/50 text-sm">No hay centros activos por ahora.</p>}
+          {!cargandoCentros && !errorCentros && !centros.length && (
+            <p className="text-white/50 text-sm">No hay centros activos por ahora.</p>
+          )}
         </section>
       )}
     </div>

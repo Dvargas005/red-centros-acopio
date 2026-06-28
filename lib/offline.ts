@@ -10,12 +10,20 @@ const KEY = "acopio_outbox_v1";
 function read(): PendingOp[] {
   try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; }
 }
-function write(ops: PendingOp[]) { localStorage.setItem(KEY, JSON.stringify(ops)); }
+function write(ops: PendingOp[]): boolean {
+  // En modo privado o con storage lleno, setItem lanza. No debe romper el flujo.
+  try { localStorage.setItem(KEY, JSON.stringify(ops)); return true; } catch { return false; }
+}
 
-export function enqueue(table: string, payload: Record<string, unknown>) {
-  const ops = read();
-  ops.push({ id: crypto.randomUUID(), table, payload, ts: Date.now() });
-  write(ops);
+// Devuelve true si se pudo guardar; false si localStorage no está disponible.
+export function enqueue(table: string, payload: Record<string, unknown>): boolean {
+  try {
+    const ops = read();
+    ops.push({ id: crypto.randomUUID(), table, payload, ts: Date.now() });
+    return write(ops);
+  } catch {
+    return false;
+  }
 }
 
 export function pendingCount(): number { return read().length; }
@@ -24,12 +32,16 @@ export function pendingCount(): number { return read().length; }
 export async function flush(
   insert: (table: string, payload: Record<string, unknown>) => Promise<{ error: unknown }>
 ) {
-  const ops = read();
-  const remaining: PendingOp[] = [];
-  for (const op of ops) {
-    const { error } = await insert(op.table, op.payload);
-    if (error) remaining.push(op); // si falla, se reintenta luego
+  try {
+    const ops = read();
+    const remaining: PendingOp[] = [];
+    for (const op of ops) {
+      const { error } = await insert(op.table, op.payload);
+      if (error) remaining.push(op); // si falla, se reintenta luego
+    }
+    write(remaining);
+    return ops.length - remaining.length;
+  } catch {
+    return 0;
   }
-  write(remaining);
-  return ops.length - remaining.length;
 }
