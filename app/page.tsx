@@ -1,3 +1,7 @@
+// NOTA (pivote RX1): este home se reescribirá en el PASO 2. El contenido
+// actual es del proyecto de "centros de acopio" y quedará reemplazado por
+// la malla de mensajería de emergencia por grupos cerrados. No tocar la UI
+// en el paso de fundación.
 import Link from "next/link";
 
 const ROLES = [

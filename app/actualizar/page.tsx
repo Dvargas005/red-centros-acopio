@@ -2,7 +2,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { CATEGORIAS, type Categoria } from "@/lib/supabase";
-import { encodeSms } from "@/lib/sms-protocol";
+import { encodeSms, generarId } from "@/lib/sms-protocol";
+
+// NOTA (pivote RX1): esta página es del flujo viejo de "centros de acopio" y
+// se reescribirá en el PASO 2. Aquí solo se hace el ajuste mínimo para que el
+// llamado a encodeSms compile contra el protocolo de emergencia v2 (RX1).
 
 // Numero de ingesta (el del gateway Android/Twilio). Se configura por env.
 const INGEST = process.env.NEXT_PUBLIC_SMS_INGEST_NUMBER ?? "";
@@ -14,11 +18,15 @@ export default function ActualizarPage() {
   const [descripcion, setDescripcion] = useState("");
   const [copiado, setCopiado] = useState(false);
 
+  // Mapeo temporal al protocolo RX1: rol CENTRO, op "N" (necesito), caso
+  // NEC/SOB. La cantidad/categoría/detalle se concatenan en la descripción.
   const sms = categoria
     ? encodeSms({
-        op: tipo, categoria,
-        cantidad: cantidad ? Number(cantidad) : undefined,
-        descripcion: descripcion || undefined,
+        id: generarId(),
+        op: "N",
+        rol: "C",
+        caso: tipo === "NECESITA" ? "NEC" : "SOB",
+        descripcion: [categoria, cantidad, descripcion].filter(Boolean).join(" ") || undefined,
       })
     : "";
 
