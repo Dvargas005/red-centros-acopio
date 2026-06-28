@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase, supabaseConfigured } from "@/lib/supabase";
-import MagicLogin from "@/components/MagicLogin";
+import { supabase, supabaseConfigured, asegurarSesion } from "@/lib/supabase";
 import { guardarGrupoActivo } from "@/lib/cache";
 
 type Tipo = "FAMILIA_VECINOS" | "RESCATE";
@@ -26,7 +25,7 @@ function enlaceInvitacion(codigo: string): string {
 
 export default function CrearGrupoPage() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<Tipo>("FAMILIA_VECINOS");
@@ -38,21 +37,22 @@ export default function CrearGrupoPage() {
   const [codigoCreado, setCodigoCreado] = useState<string | null>(null);
   const [copiado, setCopiado] = useState<"codigo" | "enlace" | null>(null);
 
+  // Sesión sin fricción: reutiliza la existente o crea una anónima silenciosa.
   useEffect(() => {
-    if (!supabaseConfigured) { setAuthReady(true); return; }
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-      setAuthReady(true);
-    });
+    if (!supabaseConfigured) return;
+    let activo = true;
+    asegurarSesion()
+      .then((uid) => { if (activo) setUserId(uid); })
+      .catch((e) => { if (activo) setAuthError(e instanceof Error ? e.message : String(e)); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUserId(session?.user?.id ?? null);
+      if (activo) setUserId(session?.user?.id ?? null);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { activo = false; sub.subscription.unsubscribe(); };
   }, []);
 
   async function crear() {
     setError(null);
-    if (!userId) { setError("Necesitas iniciar sesión."); return; }
+    if (!userId) { setError("No hay sesión activa todavía. Espera un momento e intenta de nuevo."); return; }
     if (!nombre.trim() || !creadorNombre.trim()) {
       setError("Completa el nombre del grupo y tu nombre.");
       return;
@@ -152,14 +152,15 @@ export default function CrearGrupoPage() {
     );
   }
 
-  // ----- Requiere sesión -----
-  if (authReady && !userId) {
+  // ----- Falló la sesión anónima (proveedor deshabilitado) -----
+  if (authError) {
     return (
       <div className="space-y-5">
         <Link href="/" className="text-sm text-white/50">&larr; Inicio</Link>
         <h1 className="text-xl font-bold">Crear grupo</h1>
-        <p className="text-sm text-white/60">Inicia sesión para crear tu grupo cerrado.</p>
-        <MagicLogin titulo="Acceso para crear grupo" />
+        <div className="card">
+          <p className="text-sm text-danger">{authError}</p>
+        </div>
       </div>
     );
   }
@@ -169,6 +170,7 @@ export default function CrearGrupoPage() {
     <div className="space-y-5">
       <Link href="/" className="text-sm text-white/50">&larr; Inicio</Link>
       <h1 className="text-xl font-bold">Crear grupo</h1>
+      <p className="text-sm text-white/60">Entra con tu nombre y teléfono. Sin registro ni contraseñas.</p>
 
       <div>
         <label className="label">Nombre del grupo</label>
@@ -206,7 +208,7 @@ export default function CrearGrupoPage() {
       {error && <p className="text-sm text-danger">{error}</p>}
 
       <button className="btn-accent w-full disabled:opacity-40"
-        disabled={creando || !nombre.trim() || !creadorNombre.trim()} onClick={crear}>
+        disabled={creando || !userId || !nombre.trim() || !creadorNombre.trim()} onClick={crear}>
         {creando ? "Creando…" : "Crear grupo"}
       </button>
     </div>

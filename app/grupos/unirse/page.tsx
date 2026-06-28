@@ -2,15 +2,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase, supabaseConfigured } from "@/lib/supabase";
-import MagicLogin from "@/components/MagicLogin";
+import { supabase, supabaseConfigured, asegurarSesion } from "@/lib/supabase";
 import { guardarGrupoActivo, type Miembro } from "@/lib/cache";
 
 export default function UnirseGrupoPage() {
   const router = useRouter();
 
   const [userId, setUserId] = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const [codigo, setCodigo] = useState("");
   const [nombre, setNombre] = useState("");
@@ -28,21 +27,22 @@ export default function UnirseGrupoPage() {
     if (g) setCodigo(g.toUpperCase());
   }, []);
 
+  // Sesión sin fricción: reutiliza la existente o crea una anónima silenciosa.
   useEffect(() => {
-    if (!supabaseConfigured) { setAuthReady(true); return; }
-    supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-      setAuthReady(true);
-    });
+    if (!supabaseConfigured) return;
+    let activo = true;
+    asegurarSesion()
+      .then((uid) => { if (activo) setUserId(uid); })
+      .catch((e) => { if (activo) setAuthError(e instanceof Error ? e.message : String(e)); });
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUserId(session?.user?.id ?? null);
+      if (activo) setUserId(session?.user?.id ?? null);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { activo = false; sub.subscription.unsubscribe(); };
   }, []);
 
   async function unirse() {
     setError(null);
-    if (!userId) { setError("Necesitas iniciar sesión."); return; }
+    if (!userId) { setError("No hay sesión activa todavía. Espera un momento e intenta de nuevo."); return; }
     const cod = codigo.trim().toUpperCase();
     if (cod.length !== 6 || !nombre.trim()) {
       setError("Revisa el código (6 caracteres) y tu nombre.");
@@ -109,14 +109,15 @@ export default function UnirseGrupoPage() {
     );
   }
 
-  // ----- Requiere sesión -----
-  if (authReady && !userId) {
+  // ----- Falló la sesión anónima (proveedor deshabilitado) -----
+  if (authError) {
     return (
       <div className="space-y-5">
         <Link href="/" className="text-sm text-white/50">&larr; Inicio</Link>
         <h1 className="text-xl font-bold">Unirme a un grupo</h1>
-        <p className="text-sm text-white/60">Inicia sesión para unirte al grupo.</p>
-        <MagicLogin titulo="Acceso para unirte a un grupo" />
+        <div className="card">
+          <p className="text-sm text-danger">{authError}</p>
+        </div>
       </div>
     );
   }
@@ -126,6 +127,7 @@ export default function UnirseGrupoPage() {
     <div className="space-y-5">
       <Link href="/" className="text-sm text-white/50">&larr; Inicio</Link>
       <h1 className="text-xl font-bold">Unirme a un grupo</h1>
+      <p className="text-sm text-white/60">Entra con tu nombre y teléfono. Sin registro ni contraseñas.</p>
 
       <div>
         <label className="label">Código del grupo</label>
@@ -147,7 +149,7 @@ export default function UnirseGrupoPage() {
       {error && <p className="text-sm text-danger">{error}</p>}
 
       <button className="btn-accent w-full disabled:opacity-40"
-        disabled={uniendo || listo || codigo.trim().length !== 6 || !nombre.trim()} onClick={unirse}>
+        disabled={uniendo || listo || !userId || codigo.trim().length !== 6 || !nombre.trim()} onClick={unirse}>
         {uniendo ? "Uniéndome…" : "Unirme al grupo"}
       </button>
     </div>

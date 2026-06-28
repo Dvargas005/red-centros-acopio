@@ -20,6 +20,14 @@ export default function MiGrupoPage() {
   const [copiado, setCopiado] = useState(false);
   const [cargado, setCargado] = useState(false);
 
+  // Estado de la cuenta para la sección opcional de vincular correo.
+  const [esAnonimo, setEsAnonimo] = useState(false);
+  const [tieneEmail, setTieneEmail] = useState(false);
+  const [vincEmail, setVincEmail] = useState("");
+  const [vinculando, setVinculando] = useState(false);
+  const [vincEnviado, setVincEnviado] = useState(false);
+  const [vincError, setVincError] = useState<string | null>(null);
+
   useEffect(() => {
     // 1) Carga inmediata desde cache (funciona offline).
     const { grupo: g, miembros: m } = leerGrupoActivo();
@@ -27,10 +35,17 @@ export default function MiGrupoPage() {
     setMiembros(m);
     setCargado(true);
 
-    // 2) Si hay sesión y datos, refresca miembros desde Supabase.
-    if (g && supabaseConfigured) {
-      supabase.auth.getUser().then(({ data }) => {
-        if (!data.user) return;
+    if (!supabaseConfigured) return;
+
+    // 2) Lee la cuenta actual (anónima / con correo) y, si hay datos, refresca
+    //    miembros desde Supabase.
+    supabase.auth.getUser().then(({ data }) => {
+      const user = data.user;
+      if (!user) return;
+      setEsAnonimo(user.is_anonymous === true);
+      setTieneEmail(!!user.email);
+
+      if (g) {
         supabase
           .from("grupo_miembros")
           .select("perfil_id, nombre, telefono")
@@ -42,9 +57,33 @@ export default function MiGrupoPage() {
               guardarGrupoActivo(g, frescos);
             }
           });
-      });
-    }
+      }
+    });
   }, []);
+
+  // Vincula un correo a la cuenta anónima para recuperar el acceso en otro
+  // dispositivo. Supabase envía un enlace de confirmación al correo indicado.
+  async function vincularCorreo() {
+    setVincError(null);
+    const email = vincEmail.trim();
+    if (!email) return;
+    setVinculando(true);
+    try {
+      const redirectTo =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window !== "undefined" ? window.location.origin : undefined);
+      const { error } = await supabase.auth.updateUser(
+        { email },
+        { emailRedirectTo: redirectTo }
+      );
+      if (error) throw error;
+      setVincEnviado(true);
+    } catch (e) {
+      setVincError(e instanceof Error ? e.message : "No se pudo vincular el correo.");
+    } finally {
+      setVinculando(false);
+    }
+  }
 
   function copiar() {
     if (!grupo) return;
@@ -107,6 +146,33 @@ export default function MiGrupoPage() {
           ))}
         </div>
       </div>
+
+      {/* Vincular correo: solo si la sesión es anónima y aún sin correo. */}
+      {esAnonimo && !tieneEmail && (
+        <div className="card space-y-3">
+          <h2 className="font-semibold">Proteger mi acceso (opcional)</h2>
+          <p className="text-sm text-white/60">
+            Vincula un correo para recuperar tu acceso a este grupo desde otro
+            dispositivo. No es obligatorio para seguir usando la app aquí.
+          </p>
+          {vincEnviado ? (
+            <p className="text-sm text-ok">
+              Te enviamos un enlace de confirmación a tu correo. Ábrelo para
+              terminar de vincularlo.
+            </p>
+          ) : (
+            <>
+              <input className="input" type="email" placeholder="tu@correo.com"
+                value={vincEmail} onChange={(e) => setVincEmail(e.target.value)} />
+              <button className="btn-ghost w-full disabled:opacity-40"
+                disabled={!vincEmail.trim() || vinculando} onClick={vincularCorreo}>
+                {vinculando ? "Enviando…" : "Vincular correo"}
+              </button>
+              {vincError && <p className="text-sm text-danger">{vincError}</p>}
+            </>
+          )}
+        </div>
+      )}
 
       <button className="btn-ghost w-full" onClick={salir}>
         Salir del grupo activo (solo en este dispositivo)

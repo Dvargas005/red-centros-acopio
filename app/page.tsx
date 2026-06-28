@@ -17,7 +17,7 @@ export default function Home() {
         <h1 className="text-2xl font-bold leading-tight">Malla de mensajería de emergencia</h1>
         <p className="text-white/60 text-sm">
           Coordínate con tu familia, vecinos o equipo de rescate en un grupo cerrado.
-          Alertas claras, aunque la red esté caída.
+          Sin registro: entras solo con tu nombre. Alertas claras, aunque la red esté caída.
         </p>
       </header>
 
