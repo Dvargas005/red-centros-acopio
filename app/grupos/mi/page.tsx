@@ -220,8 +220,8 @@ export default function MiGrupoPage() {
         </div>
       )}
 
-      {/* SOS destacado, separado del flujo de mensajes normales. */}
-      <Link href="/alertas/nueva?sos=1"
+      {/* SOS: flujo de UN paso, separado del composer normal. */}
+      <Link href="/alertas/sos"
         className="btn bg-danger text-white w-full text-xl py-6 font-bold ring-1 ring-white/20">
         🆘 SOS — Pedir auxilio
       </Link>

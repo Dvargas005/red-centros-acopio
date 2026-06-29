@@ -13,7 +13,7 @@
  *  Versionado: sube CACHE_VERSION para invalidar cachés viejas en 'activate'.
  * ============================================================= */
 
-const CACHE_VERSION = "rx-shell-v1";
+const CACHE_VERSION = "rx-shell-v2";
 
 // App shell mínimo: rutas principales + fallback offline + manifest.
 // Se precachea en install con allSettled para que un fallo aislado no aborte.
@@ -24,6 +24,7 @@ const APP_SHELL = [
   "/grupos/crear",
   "/grupos/unirse",
   "/alertas/nueva",
+  "/alertas/sos",
   "/leer",
   "/manifest.webmanifest",
 ];

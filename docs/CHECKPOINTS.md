@@ -61,11 +61,34 @@ nada. Dispara: al **abrir la app** y al evento **'online'** (reconectar).
 - [ ] **No se duplican**: el upsert usa `onConflict (grupo_id, codigo_corto)`.
       Reenvía/recibe el mismo mensaje y verifica que sigue siendo 1 fila.
 
-## 4) BOTÓN SOS SEPARADO — `app/page.tsx` y `app/grupos/mi/page.tsx`
-- [ ] En inicio y en "Mi grupo": el botón rojo grande **🆘 SOS — Pedir auxilio**
-      está visualmente separado del **✉️ Enviar mensaje al grupo** (neutro).
-- [ ] En el composer, la sección **Auxilio (SOS)** (roja) está aparte de
-      **Mensajes** (normales).
+## 4) BOTÓN SOS SEPARADO — dos rutas distintas
+Rutas por flujo (ya NO comparten pantalla):
+- **🆘 SOS — Pedir auxilio** → `app/alertas/sos/page.tsx` (**ruta `/alertas/sos`**):
+  pantalla de UN paso. Al entrar **preselecciona el caso** según el tipo
+  (FAMILIA/COMUNIDAD_VECINOS → "Necesito ayuda"; RESCATE → "Atrapado"),
+  **captura la ubicación automáticamente** (si la niegan, sigue sin coords y
+  avisa), nota opcional, y botón rojo "Preparar SOS para el grupo".
+- **✉️ Enviar mensaje al grupo** → `app/alertas/nueva/page.tsx`
+  (**ruta `/alertas/nueva`**): composer general, elige caso del catálogo del
+  tipo, **sin preselección** de emergencia.
+
+- [ ] En inicio y en "Mi grupo": el botón rojo **🆘 SOS** abre `/alertas/sos`
+      (un paso, caso ya elegido, pide ubicación al entrar). El **✉️ Enviar
+      mensaje** abre `/alertas/nueva` (composer general).
+- [ ] Confirma que el botón SOS **no** cae en el composer general y que "Enviar
+      mensaje" **no** cae en el flujo SOS.
+- [ ] En `/alertas/sos`, prueba negar el permiso de ubicación: debe seguir
+      permitiendo preparar el SOS sin coordenadas, con aviso.
+- [ ] En grupo de RESCATE el SOS viene como "Atrapado"; en familia/vecinos como
+      "Necesito ayuda". Puedes cambiarlo con las chips de auxilio.
+
+## 4b) CREAR GRUPO: tipo como primer paso — `app/grupos/crear/page.tsx`
+- [ ] El **tipo** se elige PRIMERO, como tabs horizontales; el activo se ve con
+      fondo accent / texto negro y los demás atenuados.
+- [ ] **Nada preseleccionado** al entrar: el resto del formulario (nombre,
+      datos) está atenuado/deshabilitado con el hint "Elige el tipo de grupo
+      para continuar" hasta tocar una tab.
+- [ ] Los campos (nombre, tu nombre, teléfono) son iguales para los tres tipos.
 
 ## 5) NORMALIZACIÓN DE TELÉFONO — `normalizarTelVE` en `lib/sms-protocol.ts`
 En crear y unirse, placeholder `Ej: +58 412 1234567` + texto de ayuda. No

@@ -8,9 +8,16 @@ import { type TipoGrupo } from "@/lib/catalogo";
 
 const TIPOS: { code: TipoGrupo; emoji: string; label: string }[] = [
   { code: "FAMILIA", emoji: "🏠", label: "Familia" },
-  { code: "COMUNIDAD_VECINOS", emoji: "🏘️", label: "Comunidad de vecinos" },
+  { code: "COMUNIDAD_VECINOS", emoji: "🏘️", label: "Vecinos" },
   { code: "RESCATE", emoji: "🚨", label: "Rescate" },
 ];
+
+// Ayuda corta de una línea por tipo (sin campos nuevos).
+const AYUDA_TIPO: Record<TipoGrupo, string> = {
+  FAMILIA: "Tu familia: a salvo, dónde están, reunirse, herido.",
+  COMUNIDAD_VECINOS: "Tu sector/edificio: lo de familia + recursos, peligros y desaparecidos.",
+  RESCATE: "Equipos de rescate: atrapados, zona despejada, personal y equipo.",
+};
 
 // Alfabeto sin caracteres ambiguos (excluye O, 0, I, 1, L).
 const ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -34,7 +41,8 @@ export default function CrearGrupoPage() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [nombre, setNombre] = useState("");
-  const [tipo, setTipo] = useState<TipoGrupo>("FAMILIA");
+  // Sin preselección: el usuario debe elegir el tipo primero.
+  const [tipo, setTipo] = useState<TipoGrupo | null>(null);
   const [creadorNombre, setCreadorNombre] = useState("");
   const [creadorTel, setCreadorTel] = useState("");
 
@@ -58,6 +66,7 @@ export default function CrearGrupoPage() {
 
   async function crear() {
     setError(null);
+    if (!tipo) { setError("Elige el tipo de grupo para continuar."); return; }
     if (!userId) { setError("No hay sesión activa todavía. Espera un momento e intenta de nuevo."); return; }
     if (!nombre.trim() || !creadorNombre.trim()) {
       setError("Completa el nombre del grupo y tu nombre.");
@@ -181,49 +190,65 @@ export default function CrearGrupoPage() {
       <h1 className="text-xl font-bold">Crear grupo</h1>
       <p className="text-sm text-white/60">Entra con tu nombre y teléfono. Sin registro ni contraseñas.</p>
 
+      {/* PASO 1 · Tipo de grupo (segmented control). Va primero y debe elegirse
+          antes de habilitar el resto del formulario. */}
       <div>
-        <label className="label">Nombre del grupo</label>
-        <input className="input" value={nombre} onChange={(e) => setNombre(e.target.value)}
-          placeholder="Familia Pérez · Edificio Los Robles" />
-      </div>
-
-      <div>
-        <label className="label">Tipo de grupo</label>
+        <label className="label">1 · Tipo de grupo</label>
         <div className="grid grid-cols-3 gap-2">
-          {TIPOS.map((t) => (
-            <button key={t.code} onClick={() => setTipo(t.code)}
-              className={`card text-center ${tipo === t.code ? "border-accent" : ""}`}>
-              <span className="block text-2xl" aria-hidden>{t.emoji}</span>
-              <span className="block text-xs font-semibold mt-1 leading-tight">{t.label}</span>
-            </button>
-          ))}
+          {TIPOS.map((t) => {
+            const activo = tipo === t.code;
+            return (
+              <button key={t.code} onClick={() => setTipo(t.code)}
+                aria-pressed={activo}
+                className={`rounded-lg border px-2 py-3 text-center transition ${
+                  activo
+                    ? "bg-accent text-black border-accent font-semibold"
+                    : "border-line text-white/50 hover:text-white/80"
+                }`}>
+                <span className="block text-xl" aria-hidden>{t.emoji}</span>
+                <span className="block text-xs mt-1 leading-tight">{t.label}</span>
+              </button>
+            );
+          })}
         </div>
-        <p className="text-xs text-white/40 mt-1">
-          Define qué mensajes ofrecerá el grupo (auxilio, recursos, rescate…).
-        </p>
+        {tipo ? (
+          <p className="text-xs text-white/50 mt-2">{AYUDA_TIPO[tipo]}</p>
+        ) : (
+          <p className="text-xs text-accent mt-2">Elige el tipo de grupo para continuar.</p>
+        )}
       </div>
 
-      <div>
-        <label className="label">Tu nombre</label>
-        <input className="input" value={creadorNombre} onChange={(e) => setCreadorNombre(e.target.value)}
-          placeholder="Cómo te verán en el grupo" />
-      </div>
-      <div>
-        <label className="label">Tu teléfono (opcional)</label>
-        <input className="input" inputMode="tel" value={creadorTel} onChange={(e) => setCreadorTel(e.target.value)}
-          placeholder="Ej: +58 412 1234567" />
-        <p className="text-xs text-white/40 mt-1">
-          Con o sin 0 inicial y con o sin espacios. Lo guardamos en formato
-          internacional (ej: +584121234567).
-        </p>
-      </div>
+      {/* PASO 2 · Datos del grupo. Atenuado y deshabilitado hasta elegir tipo. */}
+      <fieldset disabled={!tipo}
+        className={`space-y-5 border-0 p-0 m-0 ${tipo ? "" : "opacity-40 pointer-events-none"}`}>
+        <div>
+          <label className="label">2 · Nombre del grupo</label>
+          <input className="input" value={nombre} onChange={(e) => setNombre(e.target.value)}
+            placeholder="Familia Pérez · Edificio Los Robles" />
+        </div>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
+        <div>
+          <label className="label">Tu nombre</label>
+          <input className="input" value={creadorNombre} onChange={(e) => setCreadorNombre(e.target.value)}
+            placeholder="Cómo te verán en el grupo" />
+        </div>
+        <div>
+          <label className="label">Tu teléfono (opcional)</label>
+          <input className="input" inputMode="tel" value={creadorTel} onChange={(e) => setCreadorTel(e.target.value)}
+            placeholder="Ej: +58 412 1234567" />
+          <p className="text-xs text-white/40 mt-1">
+            Con o sin 0 inicial y con o sin espacios. Lo guardamos en formato
+            internacional (ej: +584121234567).
+          </p>
+        </div>
 
-      <button className="btn-accent w-full disabled:opacity-40"
-        disabled={creando || !userId || !nombre.trim() || !creadorNombre.trim()} onClick={crear}>
-        {creando ? "Creando…" : "Crear grupo"}
-      </button>
+        {error && <p className="text-sm text-danger">{error}</p>}
+
+        <button className="btn-accent w-full disabled:opacity-40"
+          disabled={creando || !userId || !nombre.trim() || !creadorNombre.trim()} onClick={crear}>
+          {creando ? "Creando…" : "Crear grupo"}
+        </button>
+      </fieldset>
     </div>
   );
 }

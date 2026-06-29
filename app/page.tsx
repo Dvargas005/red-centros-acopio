@@ -23,8 +23,8 @@ export default function Home() {
 
       {grupo && (
         <div className="space-y-2">
-          {/* SOS destacado e inconfundible, separado del flujo normal. */}
-          <Link href="/alertas/nueva?sos=1"
+          {/* SOS: flujo de UN paso, separado del composer normal. */}
+          <Link href="/alertas/sos"
             className="btn bg-danger text-white w-full text-xl py-6 font-bold ring-1 ring-white/20">
             🆘 SOS — Pedir auxilio
           </Link>
