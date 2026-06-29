@@ -135,7 +135,7 @@ export default function LeerPage() {
         <label className="label">Mensaje recibido (SMS)</label>
         <textarea className="input min-h-24" value={texto}
           onChange={(e) => { setTexto(e.target.value); setRegistrado(false); setEstatus(null); }}
-          placeholder="RX1 7g2k S V ATR @10.601,-66.934 t3" />
+          placeholder="SOS - Juan - ATRAPADO - piso 4 - https://maps.google.com/?q=10.601,-66.934 - [7g2k #ATR t3 g:Familia Perez]" />
       </div>
 
       <div>
@@ -149,7 +149,7 @@ export default function LeerPage() {
       </div>
 
       {texto && !decoded && (
-        <p className="text-sm text-danger">No se pudo leer el mensaje. ¿Es un SMS RX1 válido?</p>
+        <p className="text-sm text-danger">No se pudo leer el mensaje. Pega un SMS generado por la app (lleva un código entre corchetes al final).</p>
       )}
 
       {decoded && (
@@ -159,7 +159,7 @@ export default function LeerPage() {
               ? `Cambio de estado → ${estadoEntrante}`
               : describirAlerta({ rol: decoded.rol, caso: decoded.caso })}
           </p>
-          <p className="text-sm text-white/60">Remitente: {remitente ?? "desconocido"}</p>
+          <p className="text-sm text-white/60">Remitente: {remitente ?? decoded.emisorNombre ?? "desconocido"}</p>
           {decoded.descripcion && <p className="text-sm">{decoded.descripcion}</p>}
           <p className="text-xs text-white/40">
             {local?.creado_en ? haceCuanto(local.creado_en) : "recién recibido"}

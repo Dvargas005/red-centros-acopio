@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase, supabaseConfigured, asegurarSesion } from "@/lib/supabase";
 import { guardarGrupoActivo, type Miembro } from "@/lib/cache";
+import { normalizarTelVE } from "@/lib/sms-protocol";
 
 export default function UnirseGrupoPage() {
   const router = useRouter();
@@ -67,17 +68,20 @@ export default function UnirseGrupoPage() {
       const grupo = Array.isArray(data) ? data[0] : null;
       if (!grupo) { setError("Código no encontrado."); setUniendo(false); return; }
 
+      // Normaliza el teléfono a formato consistente (+58...) antes de guardar.
+      const telNorm = normalizarTelVE(tel) || null;
+
       // 2) Perfil propio.
       const { error: ePerfil } = await supabase
         .from("perfiles")
-        .upsert({ id: uid, nombre: nombre.trim(), telefono: tel.trim() || null });
+        .upsert({ id: uid, nombre: nombre.trim(), telefono: telNorm });
       if (ePerfil) throw ePerfil;
 
       // 3) Membresía (sin duplicar si ya era miembro).
       const { error: eMiembro } = await supabase
         .from("grupo_miembros")
         .upsert(
-          { grupo_id: grupo.id, perfil_id: uid, nombre: nombre.trim(), telefono: tel.trim() || null },
+          { grupo_id: grupo.id, perfil_id: uid, nombre: nombre.trim(), telefono: telNorm },
           { onConflict: "grupo_id,perfil_id" }
         );
       if (eMiembro) throw eMiembro;
@@ -151,7 +155,11 @@ export default function UnirseGrupoPage() {
       <div>
         <label className="label">Tu teléfono (opcional)</label>
         <input className="input" inputMode="tel" value={tel} onChange={(e) => setTel(e.target.value)}
-          placeholder="+58 412 555 1234" />
+          placeholder="Ej: +58 412 1234567" />
+        <p className="text-xs text-white/40 mt-1">
+          Con o sin 0 inicial y con o sin espacios. Lo guardamos en formato
+          internacional (ej: +584121234567).
+        </p>
       </div>
 
       {error && <p className="text-sm text-danger">{error}</p>}

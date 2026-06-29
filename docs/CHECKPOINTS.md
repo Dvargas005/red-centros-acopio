@@ -4,6 +4,105 @@
 > `es_miembro(grupo_id)`. Yo (Claude) **no puedo** ejecutar SQL ni probar en
 > navegador / SMS / con dos dispositivos. Esta es tu lista de tareas.
 
+---
+
+# PIVOTE — offline-first + UX (lo que debes probar ahora)
+
+> Build verde ✅. Todo lo de abajo es verificación manual tuya.
+
+## 0) MIGRACIÓN DE BASE DE DATOS (CRÍTICO, hacer primero)
+El enum `tipo_grupo` cambió de `('FAMILIA_VECINOS','RESCATE')` a
+`('FAMILIA','COMUNIDAD_VECINOS','RESCATE')`.
+
+- **Base nueva**: corre `supabase/schema.sql` completo; ya crea el enum con los
+  tres valores.
+- **Base existente** (ya tenía el enum viejo): ejecuta en el **SQL Editor**,
+  como sentencias sueltas (no dentro de una transacción):
+  ```sql
+  alter type tipo_grupo rename value 'FAMILIA_VECINOS' to 'FAMILIA';
+  alter type tipo_grupo add value if not exists 'COMUNIDAD_VECINOS';
+  ```
+  Las filas viejas `FAMILIA_VECINOS` quedan como `FAMILIA`. (También está como
+  comentario en `supabase/schema.sql`.)
+
+## 1) OFFLINE REAL (service worker) — `public/sw.js` + `components/ClientBoot.tsx`
+El SW solo se registra en **producción** (para no romper el HMR de `next dev`).
+Cómo probar:
+1. `npm run build && npm start` y abre http://localhost:3000.
+2. Navega por las pantallas (inicio, mi grupo, enviar mensaje, leer) **con red**
+   una vez, para que el app shell quede cacheado.
+3. DevTools → Application → Service Workers: confirma `sw.js` "activated".
+4. DevTools → Network → **Offline** (o apaga el wifi) y **recarga**: la app debe
+   ABRIR igual. Debes poder leer el grupo y miembros cacheados, ver el tablero
+   de alertas (desde caché local) y componer un mensaje.
+5. Visita una ruta no cacheada estando offline → debe caer a la página
+   **/offline** (fallback), no al dino del navegador.
+
+## 2) SMS LEGIBLE PLANO — `lib/sms-protocol.ts`
+El SMS ya NO es `RX1 ...` cifrado: ahora es texto humano. Ejemplos reales que
+genera la app:
+```
+SOS - Juan - ATRAPADO - piso 4 - https://maps.google.com/?q=10.601,-66.934 - [7g2k #ATR t3 g:Familia Perez]
+AVISO - Ana - ESTOY A SALVO - [9a1z #SAL g:Familia Perez]
+ACTUALIZACION - Luis - RESUELTA - [7g2k e:RES g:Familia Perez]
+```
+- [ ] Crea un mensaje y confirma que el cuerpo se entiende **sin la app**.
+- [ ] El corchete final `[...]` lleva el id corto (de-dup) + códigos.
+- [ ] En **Leer un mensaje**, pega uno de esos textos (prueba también en
+      MAYÚSCULAS/minúsculas: el decode es **case-insensitive**) y confirma que lo
+      lee bien (caso, nota, mapa, estado) y deduplica.
+
+## 3) SYNC OPORTUNISTA — `lib/sync.ts` (cableado en `ClientBoot`)
+Las alertas creadas/recibidas offline suben solas a Supabase, sin que toques
+nada. Dispara: al **abrir la app** y al evento **'online'** (reconectar).
+- [ ] Estando offline, crea 1–2 mensajes (quedan en cola / outbox).
+- [ ] Reactiva la red. Sin recargar ni tocar botones, en segundos deben subir.
+      Confírmalo en Supabase (tabla `alertas`).
+- [ ] **No se duplican**: el upsert usa `onConflict (grupo_id, codigo_corto)`.
+      Reenvía/recibe el mismo mensaje y verifica que sigue siendo 1 fila.
+
+## 4) BOTÓN SOS SEPARADO — `app/page.tsx` y `app/grupos/mi/page.tsx`
+- [ ] En inicio y en "Mi grupo": el botón rojo grande **🆘 SOS — Pedir auxilio**
+      está visualmente separado del **✉️ Enviar mensaje al grupo** (neutro).
+- [ ] En el composer, la sección **Auxilio (SOS)** (roja) está aparte de
+      **Mensajes** (normales).
+
+## 5) NORMALIZACIÓN DE TELÉFONO — `normalizarTelVE` en `lib/sms-protocol.ts`
+En crear y unirse, placeholder `Ej: +58 412 1234567` + texto de ayuda. No
+bloquea por formato; normaliza antes de guardar. Casos verificados:
+```
+0412 123 4567   -> +584121234567
+412-1234567     -> +584121234567
++58 0412 1234567-> +584121234567
+04141112233     -> +584141112233
++1 305 5551234  -> +13055551234   (respeta código internacional)
+```
+- [ ] Crea/únete con el número en varios formatos y confirma que en Supabase
+      (`perfiles.telefono`, `grupo_miembros.telefono`) queda consistente.
+
+## 6) TRES TIPOS DE GRUPO — `app/grupos/crear` + `lib/catalogo.ts`
+- [ ] Al crear, hay **tres** opciones: Familia, Comunidad de vecinos, Rescate.
+- [ ] El tipo se guarda y "Mi grupo" muestra la etiqueta correcta.
+
+## 7) CATÁLOGO POR TIPO — `lib/catalogo.ts` (composer `app/alertas/nueva`)
+El composer muestra SOLO los mensajes del tipo del grupo activo:
+- **FAMILIA**: Estoy a salvo · Necesito ayuda · ¿Dónde están? · Reunámonos en
+  [lugar] · Herido, necesito médico.
+- **COMUNIDAD_VECINOS**: lo de familia + Peligro en la zona · Necesito recurso ·
+  Ofrezco recurso · Persona desaparecida del sector.
+- **RESCATE**: Atrapado · Zona despejada · Peligro estructural · Necesito
+  personal · Necesito equipo · Hallado con vida · Hallado sin vida.
+- [ ] Crea un grupo de cada tipo y confirma que el composer ofrece exactamente
+      esos mensajes (y que en familia **no** aparece la palabra "víctima").
+- [ ] "Reunámonos en [lugar]" pide el lugar y lo incrusta en el texto legible.
+
+> Pendiente para un prompt posterior (NO implementado ahora, por decisión):
+> "mensajes personalizados con código" y "checks de quién está al tanto".
+
+---
+
+# (Histórico) Bitácora de módulos RX1 anteriores
+
 ## Estado de SQL del esquema (CRÍTICO)
 - [ ] **Confirmar que `supabase/schema.sql` está aplicado** en el proyecto Supabase.
       Los módulos MSG-002..005 **no requieren SQL nuevo**: usan las tablas

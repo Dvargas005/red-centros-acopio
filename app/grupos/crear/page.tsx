@@ -3,8 +3,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase, supabaseConfigured, asegurarSesion } from "@/lib/supabase";
 import { guardarGrupoActivo } from "@/lib/cache";
+import { normalizarTelVE } from "@/lib/sms-protocol";
+import { type TipoGrupo } from "@/lib/catalogo";
 
-type Tipo = "FAMILIA_VECINOS" | "RESCATE";
+const TIPOS: { code: TipoGrupo; emoji: string; label: string }[] = [
+  { code: "FAMILIA", emoji: "🏠", label: "Familia" },
+  { code: "COMUNIDAD_VECINOS", emoji: "🏘️", label: "Comunidad de vecinos" },
+  { code: "RESCATE", emoji: "🚨", label: "Rescate" },
+];
 
 // Alfabeto sin caracteres ambiguos (excluye O, 0, I, 1, L).
 const ALFABETO = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -28,7 +34,7 @@ export default function CrearGrupoPage() {
   const [authError, setAuthError] = useState<string | null>(null);
 
   const [nombre, setNombre] = useState("");
-  const [tipo, setTipo] = useState<Tipo>("FAMILIA_VECINOS");
+  const [tipo, setTipo] = useState<TipoGrupo>("FAMILIA");
   const [creadorNombre, setCreadorNombre] = useState("");
   const [creadorTel, setCreadorTel] = useState("");
 
@@ -59,10 +65,13 @@ export default function CrearGrupoPage() {
     }
     setCreando(true);
     try {
+      // Normaliza el teléfono a formato consistente (+58...) antes de guardar.
+      const telNorm = normalizarTelVE(creadorTel) || null;
+
       // 1) Perfil del creador.
       const { error: ePerfil } = await supabase
         .from("perfiles")
-        .upsert({ id: userId, nombre: creadorNombre.trim(), telefono: creadorTel.trim() || null });
+        .upsert({ id: userId, nombre: creadorNombre.trim(), telefono: telNorm });
       if (ePerfil) throw ePerfil;
 
       // 2) Inserta el grupo, reintentando si el código choca (unique).
@@ -90,14 +99,14 @@ export default function CrearGrupoPage() {
           grupo_id: grupoId,
           perfil_id: userId,
           nombre: creadorNombre.trim(),
-          telefono: creadorTel.trim() || null,
+          telefono: telNorm,
         });
       if (eMiembro) throw eMiembro;
 
       // 4) Cache local del grupo activo + miembros.
       guardarGrupoActivo(
         { id: grupoId, nombre: nombre.trim(), tipo, codigo },
-        [{ perfil_id: userId, nombre: creadorNombre.trim(), telefono: creadorTel.trim() || undefined }]
+        [{ perfil_id: userId, nombre: creadorNombre.trim(), telefono: telNorm || undefined }]
       );
 
       setCodigoCreado(codigo);
@@ -180,18 +189,18 @@ export default function CrearGrupoPage() {
 
       <div>
         <label className="label">Tipo de grupo</label>
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => setTipo("FAMILIA_VECINOS")}
-            className={`card text-center ${tipo === "FAMILIA_VECINOS" ? "border-accent" : ""}`}>
-            <span className="block text-2xl" aria-hidden>🏠</span>
-            <span className="block text-sm font-semibold mt-1">Familia / Vecinos</span>
-          </button>
-          <button onClick={() => setTipo("RESCATE")}
-            className={`card text-center ${tipo === "RESCATE" ? "border-accent" : ""}`}>
-            <span className="block text-2xl" aria-hidden>🚨</span>
-            <span className="block text-sm font-semibold mt-1">Rescate</span>
-          </button>
+        <div className="grid grid-cols-3 gap-2">
+          {TIPOS.map((t) => (
+            <button key={t.code} onClick={() => setTipo(t.code)}
+              className={`card text-center ${tipo === t.code ? "border-accent" : ""}`}>
+              <span className="block text-2xl" aria-hidden>{t.emoji}</span>
+              <span className="block text-xs font-semibold mt-1 leading-tight">{t.label}</span>
+            </button>
+          ))}
         </div>
+        <p className="text-xs text-white/40 mt-1">
+          Define qué mensajes ofrecerá el grupo (auxilio, recursos, rescate…).
+        </p>
       </div>
 
       <div>
@@ -202,7 +211,11 @@ export default function CrearGrupoPage() {
       <div>
         <label className="label">Tu teléfono (opcional)</label>
         <input className="input" inputMode="tel" value={creadorTel} onChange={(e) => setCreadorTel(e.target.value)}
-          placeholder="+58 412 555 1234" />
+          placeholder="Ej: +58 412 1234567" />
+        <p className="text-xs text-white/40 mt-1">
+          Con o sin 0 inicial y con o sin espacios. Lo guardamos en formato
+          internacional (ej: +584121234567).
+        </p>
       </div>
 
       {error && <p className="text-sm text-danger">{error}</p>}

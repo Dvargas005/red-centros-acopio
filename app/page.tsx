@@ -22,10 +22,17 @@ export default function Home() {
       </header>
 
       {grupo && (
-        <Link href="/alertas/nueva"
-          className="btn bg-danger text-white w-full text-lg py-5 font-bold">
-          🆘 SOS — Enviar alerta
-        </Link>
+        <div className="space-y-2">
+          {/* SOS destacado e inconfundible, separado del flujo normal. */}
+          <Link href="/alertas/nueva?sos=1"
+            className="btn bg-danger text-white w-full text-xl py-6 font-bold ring-1 ring-white/20">
+            🆘 SOS — Pedir auxilio
+          </Link>
+          {/* Mensaje normal: acción aparte, estilo neutro. */}
+          <Link href="/alertas/nueva" className="btn-ghost w-full">
+            ✉️ Enviar mensaje al grupo
+          </Link>
+        </div>
       )}
 
       <nav className="grid gap-3">

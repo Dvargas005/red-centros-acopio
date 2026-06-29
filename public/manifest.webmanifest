@@ -1,7 +1,7 @@
 {
-  "name": "Red de Centros de Acopio",
-  "short_name": "Acopio",
-  "description": "Coordinacion abierta de donaciones en emergencia.",
+  "name": "Malla de mensajería de emergencia",
+  "short_name": "Malla SOS",
+  "description": "Grupos cerrados para coordinar alertas de emergencia con tu familia, vecinos o equipo de rescate. Funciona sin conexión.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b0f14",

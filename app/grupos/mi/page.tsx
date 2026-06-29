@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase, supabaseConfigured } from "@/lib/supabase";
 import { encodeSms } from "@/lib/sms-protocol";
+import { TIPO_GRUPO_LABEL, normalizarTipo } from "@/lib/catalogo";
 import {
   leerGrupoActivo, guardarGrupoActivo, limpiarGrupoActivo,
   leerAlertasLocales, guardarAlertaLocal, actualizarEstadoLocal,
@@ -24,11 +25,6 @@ const ACCIONES: { estado: EstadoAlerta; label: string }[] = [
   { estado: "CANCELADA", label: "Cancelar" },
   { estado: "FALSA_ALARMA", label: "Falsa alarma" },
 ];
-
-const TIPO_LABEL: Record<string, string> = {
-  FAMILIA_VECINOS: "Familia / Vecinos",
-  RESCATE: "Rescate",
-};
 
 // Timestamp más reciente (subido_en o creado_en) de una lista de alertas.
 function ultimaActividad(list: Alerta[]): string | null {
@@ -133,8 +129,12 @@ export default function MiGrupoPage() {
     if (!grupo) return;
     setAccionError(null);
 
-    // SMS de difusión: RX1 <id> E <estado>.
-    const sms = encodeSms({ id: a.codigo_corto, op: "E", estado });
+    // SMS de difusión legible: "ACTUALIZACION - <yo> - <ESTADO> - [<id> e:..]".
+    const miNombre = miembros.find((m) => m.perfil_id && m.perfil_id === userId)?.nombre || "";
+    const sms = encodeSms({
+      id: a.codigo_corto, op: "E", estado,
+      nombre: miNombre || undefined, grupo: grupo.nombre,
+    });
     setDifusion({ codigo: a.codigo_corto, sms });
 
     // Local primero (funciona offline).
@@ -211,7 +211,7 @@ export default function MiGrupoPage() {
 
       <header className="space-y-1">
         <h1 className="text-xl font-bold">{grupo.nombre}</h1>
-        <p className="text-sm text-white/60">{TIPO_LABEL[grupo.tipo] ?? grupo.tipo}</p>
+        <p className="text-sm text-white/60">{TIPO_GRUPO_LABEL[normalizarTipo(grupo.tipo)]}</p>
       </header>
 
       {notif && (
@@ -220,10 +220,17 @@ export default function MiGrupoPage() {
         </div>
       )}
 
-      <Link href="/alertas/nueva" className="btn bg-danger text-white w-full text-lg py-5 font-bold">
-        🆘 SOS — Enviar alerta
+      {/* SOS destacado, separado del flujo de mensajes normales. */}
+      <Link href="/alertas/nueva?sos=1"
+        className="btn bg-danger text-white w-full text-xl py-6 font-bold ring-1 ring-white/20">
+        🆘 SOS — Pedir auxilio
       </Link>
-      <Link href="/leer" className="btn-ghost w-full">📥 Leer una alerta recibida</Link>
+
+      {/* Mensajes normales y lectura: acciones aparte, estilo neutro. */}
+      <div className="grid gap-2">
+        <Link href="/alertas/nueva" className="btn-ghost w-full">✉️ Enviar mensaje al grupo</Link>
+        <Link href="/leer" className="btn-ghost w-full">📥 Leer un mensaje recibido</Link>
+      </div>
 
       {/* Tablero de alertas por estado. */}
       <div>

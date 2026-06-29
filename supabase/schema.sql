@@ -29,9 +29,25 @@
 create extension if not exists "uuid-ossp";
 
 -- ---------- ENUMS ----------
+-- Tres tipos de grupo: FAMILIA, COMUNIDAD_VECINOS, RESCATE.
 do $$ begin
-  create type tipo_grupo as enum ('FAMILIA_VECINOS','RESCATE');
+  create type tipo_grupo as enum ('FAMILIA','COMUNIDAD_VECINOS','RESCATE');
 exception when duplicate_object then null; end $$;
+
+-- ----------------------------------------------------------------
+--  MIGRACIÓN del enum tipo_grupo en una base EXISTENTE
+--  (antes era ('FAMILIA_VECINOS','RESCATE')). Ejecuta esto UNA vez en el
+--  SQL Editor si tu base ya tenía el enum viejo. No corre dentro de una
+--  transacción explícita: ejecútalo como sentencias sueltas.
+--
+--    -- 1) Renombrar el valor viejo a FAMILIA:
+--    alter type tipo_grupo rename value 'FAMILIA_VECINOS' to 'FAMILIA';
+--    -- 2) Agregar el nuevo valor COMUNIDAD_VECINOS:
+--    alter type tipo_grupo add value if not exists 'COMUNIDAD_VECINOS';
+--    -- (RESCATE ya existe; no hay que tocarlo.)
+--
+--  Tras esto, las filas que tenían 'FAMILIA_VECINOS' quedan como 'FAMILIA'.
+-- ----------------------------------------------------------------
 
 do $$ begin
   create type rol_emisor as enum ('VICTIMA','RESCATISTA','FAMILIAR','CENTRO');
