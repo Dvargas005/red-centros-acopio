@@ -23,8 +23,12 @@ export const supabase = createClient(
 // válido, así que no hay que tocar el esquema. Lanza un Error en español si
 // el proveedor anónimo no está habilitado en Supabase.
 export async function asegurarSesion(): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) return user.id;
+  // getSession() lee la sesión desde storage: es rápido y NO compite por el
+  // lock de validación de auth como getUser(), que puede quedarse colgado al
+  // arranque (junto a la emisión de INITIAL_SESSION de onAuthStateChange) y
+  // dejar la promesa sin resolver → userId nunca se setea.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.user) return session.user.id;
   const { data, error } = await supabase.auth.signInAnonymously();
   if (error || !data.user) {
     throw new Error(

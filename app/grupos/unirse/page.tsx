@@ -34,15 +34,17 @@ export default function UnirseGrupoPage() {
     asegurarSesion()
       .then((uid) => { if (activo) setUserId(uid); })
       .catch((e) => { if (activo) setAuthError(e instanceof Error ? e.message : String(e)); });
+    // Solo subimos userId cuando hay sesión real; no lo bajamos a null por la
+    // emisión inicial (INITIAL_SESSION con session=null) que ocurre al registrar
+    // el listener, para no dejar el botón bloqueado de forma intermitente.
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (activo) setUserId(session?.user?.id ?? null);
+      if (activo && session?.user) setUserId(session.user.id);
     });
     return () => { activo = false; sub.subscription.unsubscribe(); };
   }, []);
 
   async function unirse() {
     setError(null);
-    if (!userId) { setError("No hay sesión activa todavía. Espera un momento e intenta de nuevo."); return; }
     const cod = codigo.trim().toUpperCase();
     if (cod.length !== 6 || !nombre.trim()) {
       setError("Revisa el código (6 caracteres) y tu nombre.");
@@ -50,6 +52,12 @@ export default function UnirseGrupoPage() {
     }
     setUniendo(true);
     try {
+      // 0) Asegura la sesión DENTRO del handler. No abortamos si userId aún no
+      //    llegó: si la sesión tardó o el listener la dejó en null, la creamos
+      //    aquí mismo en vez de bloquear al usuario.
+      const uid = userId ?? (await asegurarSesion());
+      if (!userId) setUserId(uid);
+
       // 1) Busca el grupo por código vía RPC SECURITY DEFINER. La política RLS
       //    de SELECT en `grupos` no deja ver el grupo a un no-miembro, así que
       //    una consulta directa devolvería [] (de ahí el falso "no encontrado").
@@ -62,14 +70,14 @@ export default function UnirseGrupoPage() {
       // 2) Perfil propio.
       const { error: ePerfil } = await supabase
         .from("perfiles")
-        .upsert({ id: userId, nombre: nombre.trim(), telefono: tel.trim() || null });
+        .upsert({ id: uid, nombre: nombre.trim(), telefono: tel.trim() || null });
       if (ePerfil) throw ePerfil;
 
       // 3) Membresía (sin duplicar si ya era miembro).
       const { error: eMiembro } = await supabase
         .from("grupo_miembros")
         .upsert(
-          { grupo_id: grupo.id, perfil_id: userId, nombre: nombre.trim(), telefono: tel.trim() || null },
+          { grupo_id: grupo.id, perfil_id: uid, nombre: nombre.trim(), telefono: tel.trim() || null },
           { onConflict: "grupo_id,perfil_id" }
         );
       if (eMiembro) throw eMiembro;
@@ -149,7 +157,7 @@ export default function UnirseGrupoPage() {
       {error && <p className="text-sm text-danger">{error}</p>}
 
       <button className="btn-accent w-full disabled:opacity-40"
-        disabled={uniendo || listo || !userId || codigo.trim().length !== 6 || !nombre.trim()} onClick={unirse}>
+        disabled={uniendo || listo || codigo.trim().length !== 6 || !nombre.trim()} onClick={unirse}>
         {uniendo ? "Uniéndome…" : "Unirme al grupo"}
       </button>
     </div>
