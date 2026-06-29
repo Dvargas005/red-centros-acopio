@@ -118,6 +118,19 @@ returns boolean language sql security definer set search_path = public as $$
 $$;
 grant execute on function es_miembro(uuid) to anon, authenticated;
 
+-- ---------- buscar_grupo_por_codigo ----------
+-- Permite que un NO-miembro resuelva un grupo por su código de invitación para
+-- poder unirse. La política RLS de SELECT en `grupos` solo deja ver el grupo a
+-- miembros/creador, así que una consulta directa devolvería [] y rompería el
+-- flujo de "unirse". SECURITY DEFINER evita RLS y expone solo lo mínimo
+-- (id, nombre, tipo) buscando por código en mayúsculas.
+create or replace function buscar_grupo_por_codigo(p_codigo text)
+returns table (id uuid, nombre text, tipo tipo_grupo)
+language sql security definer set search_path = public as $$
+  select id, nombre, tipo from grupos where codigo = upper(p_codigo) limit 1;
+$$;
+grant execute on function buscar_grupo_por_codigo(text) to anon, authenticated;
+
 -- =============================================================
 --  ROW LEVEL SECURITY
 --  Grupos cerrados: todo el acceso pasa por pertenencia al grupo.

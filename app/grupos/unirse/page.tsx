@@ -50,13 +50,13 @@ export default function UnirseGrupoPage() {
     }
     setUniendo(true);
     try {
-      // 1) Busca el grupo por código (case-insensitive vía mayúsculas).
-      const { data: grupo, error: eGrupo } = await supabase
-        .from("grupos")
-        .select("id, nombre, tipo, codigo")
-        .eq("codigo", cod)
-        .maybeSingle();
+      // 1) Busca el grupo por código vía RPC SECURITY DEFINER. La política RLS
+      //    de SELECT en `grupos` no deja ver el grupo a un no-miembro, así que
+      //    una consulta directa devolvería [] (de ahí el falso "no encontrado").
+      const { data, error: eGrupo } = await supabase
+        .rpc("buscar_grupo_por_codigo", { p_codigo: cod });
       if (eGrupo) throw eGrupo;
+      const grupo = Array.isArray(data) ? data[0] : null;
       if (!grupo) { setError("Código no encontrado."); setUniendo(false); return; }
 
       // 2) Perfil propio.
@@ -80,7 +80,7 @@ export default function UnirseGrupoPage() {
         .select("perfil_id, nombre, telefono")
         .eq("grupo_id", grupo.id);
       guardarGrupoActivo(
-        { id: grupo.id, nombre: grupo.nombre, tipo: grupo.tipo, codigo: grupo.codigo },
+        { id: grupo.id, nombre: grupo.nombre, tipo: grupo.tipo, codigo: cod },
         (miembros ?? []) as Miembro[]
       );
 
